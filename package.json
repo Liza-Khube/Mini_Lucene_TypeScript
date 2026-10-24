@@ -1,0 +1,28 @@
+{
+  "name": "mini_lucene_typescript",
+  "version": "1.0.0",
+  "description": "Повнотекстовий пошуковий рушій",
+  "main": "index.js",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Liza-Khube/Mini_Lucene_TypeScript.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Liza-Khube/Mini_Lucene_TypeScript/issues"
+  },
+  "homepage": "https://github.com/Liza-Khube/Mini_Lucene_TypeScript#readme",
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
