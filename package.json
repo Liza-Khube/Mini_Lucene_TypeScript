@@ -2,9 +2,9 @@
   "name": "mini_lucene_typescript",
   "version": "1.0.0",
   "description": "Повнотекстовий пошуковий рушій",
-  "main": "index.js",
+  "main": "app.js",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "tsx src/app.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
