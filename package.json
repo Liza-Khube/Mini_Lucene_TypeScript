@@ -3,10 +3,17 @@
   "version": "1.0.0",
   "description": "Повнотекстовий пошуковий рушій",
   "main": "app.js",
+  "engines": {
+    "node": ">=24.11.0"
+  },
   "scripts": {
     "start": "tsx src/app.ts",
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:mutation": "stryker run"
   },
   "repository": {
     "type": "git",
@@ -21,8 +28,13 @@
   },
   "homepage": "https://github.com/Liza-Khube/Mini_Lucene_TypeScript#readme",
   "devDependencies": {
+    "@stryker-mutator/core": "^10.1.1",
+    "@stryker-mutator/vitest-runner": "^10.1.1",
     "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.1.0",
+    "fast-check": "^4.10.2",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
   }
 }
