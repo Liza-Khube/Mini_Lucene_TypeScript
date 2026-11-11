@@ -2,7 +2,7 @@ import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import type { Readable, Writable } from 'node:stream';
 
-import { formatHelpOutput, getCommandUsage } from './commands.js';
+import { isCommandTakeArgs, formatHelpOutput, getCommandUsage } from './commands.js';
 import { parseCommandInput, type ParsedCommandInput } from './command-input-parser.js';
 
 export class CommandShell {
@@ -27,11 +27,8 @@ export class CommandShell {
 
     for await (const userInput of this.readline) {
       try {
-        const parsedInput = parseCommandInput(userInput);
-
-        if (parsedInput.type === 'command' && parsedInput.name === 'exit') break;
-
-        await this.execute(parsedInput);
+        const shouldContinue = await this.execute(parseCommandInput(userInput));
+        if (!shouldContinue) break;
       } catch (error: unknown) {
         this.print(`Error: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -42,18 +39,18 @@ export class CommandShell {
     this.print('\nExiting...');
   }
 
-  async execute(parsedInput: ParsedCommandInput): Promise<void> {
-    if (parsedInput.type === 'empty') return;
+  async execute(parsedInput: ParsedCommandInput): Promise<boolean> {
+    if (parsedInput.type === 'empty') return true;
 
     if (parsedInput.type === 'unknown') {
       this.print(`Unknown command: ${parsedInput.name}\nType "help"`);
-      return;
+      return true;
     }
 
     const { name, args } = parsedInput;
-    if ((name === 'index' || name === 'search') && args === '') {
+    if (isCommandTakeArgs(name) !== (args !== '')) {
       this.print(`Usage: ${getCommandUsage(name)}`);
-      return;
+      return true;
     }
 
     switch (name) {
@@ -69,7 +66,10 @@ export class CommandShell {
       case 'help':
         this.print(formatHelpOutput());
         break;
+      case 'exit':
+        return false;
     }
+    return true;
   }
 
   private print(text: string): void {
