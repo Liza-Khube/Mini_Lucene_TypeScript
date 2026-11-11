@@ -34,7 +34,7 @@ export const COMMANDS = [
 
 export type CommandName = (typeof COMMANDS)[number]['name'];
 
-export function isCommanName(value: string): value is CommandName {
+export function isCommandName(value: string): value is CommandName {
   return COMMANDS.some((command) => command.name === value);
 }
 

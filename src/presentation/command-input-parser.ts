@@ -1,4 +1,4 @@
-import { isCommanName, type CommandName } from './commands.js';
+import { isCommandName, type CommandName } from './commands.js';
 
 export type ParsedCommandInput =
   | { type: 'command'; name: CommandName; args: string }
@@ -6,14 +6,15 @@ export type ParsedCommandInput =
   | { type: 'empty' };
 
 export function parseCommandInput(userInput: string): ParsedCommandInput {
-  const input = userInput.trim();
+  const input: string = userInput.trim();
 
   if (input === '') return { type: 'empty' };
 
-  const splitedInput = /^(\S+)\s*([\s\S]*)$/.exec(input);
-  const name = splitedInput?.[1] ?? input;
-  const args = splitedInput?.[2] ?? '';
+  const separatorIndex: number = input.search(/\s/);
+  const hasArgs: boolean = separatorIndex !== -1;
+  const rawName: string = hasArgs ? input.slice(0, separatorIndex) : input;
+  const args: string = hasArgs ? input.slice(separatorIndex).trimStart() : '';
 
-  name.toLowerCase();
-  return isCommanName(name) ? { type: 'command', name, args } : { type: 'unknown', name };
+  const name: string = rawName.toLowerCase();
+  return isCommandName(name) ? { type: 'command', name, args } : { type: 'unknown', name: rawName };
 }
