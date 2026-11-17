@@ -1,32 +1,24 @@
 import { describe, expect, test } from 'vitest';
-import { DuplicateSourceError, InvertedIndex } from '../../../src/data/inverted-index.js';
-import type { DocId, IToken } from '../../../src/data/inverted-index.js';
-
-const toTokens = (text: string): IToken[] => {
-  const trimmed = text.trim();
-  if (trimmed === '') return [];
-  return trimmed.split(/\s+/).map((term, i) => ({ term, position: i + 1 }));
-};
-
-type DocSpec = readonly [source: string, text: string];
-
-const buildIndex = (docs: readonly DocSpec[]): InvertedIndex => {
-  const index = new InvertedIndex();
-  for (const [source, text] of docs) {
-    index.addDocument(source, toTokens(text));
-  }
-  return index;
-};
-
-const wordsOfLength = (n: number): string => Array.from({ length: n }, (_, i) => `w${i}`).join(' ');
-
-const SAMPLE_DOCS: readonly DocSpec[] = [
-  ['doc0.txt', 'cat dog cat cat'],
-  ['doc1.txt', 'cat bird'],
-  ['doc2.txt', 'dog'],
-];
-
-const SAMPLE_TERMS = ['cat', 'dog', 'bird', 'fish'] as const;
+import {
+  DuplicateSourceError,
+  InvalidTokenPositionError,
+  InvertedIndex,
+} from '../../../../src/data/inverted-index/public-api.js';
+import type {
+  DocId,
+  IDocumentInfo,
+  IPosting,
+  IToken,
+} from '../../../../src/data/inverted-index/public-api.js';
+import {
+  SAMPLE_DOCS,
+  SAMPLE_TERMS,
+  buildIndex,
+  toTokens,
+  wordsOfLength,
+  type DocSpec,
+  type Mutable,
+} from './fixtures.js';
 
 describe('InvertedIndex', () => {
   describe('empty index', () => {
@@ -45,14 +37,16 @@ describe('InvertedIndex', () => {
       expect(index.getAllDocIds()).toEqual([]);
     });
 
-    test.each(['word', '', 'two words', 'ünïcödé', '42'])(
+    test.each(['cat', '', 'two words', 'ünïcödé', '42'])(
       'should return empty results for the unknown term %j',
       (term) => {
         const index = new InvertedIndex();
 
         expect(index.hasTerm(term)).toBe(false);
-        expect(index.getPostings(term)).toEqual([]);
-        expect(index.getPositions(term, 0)).toEqual([]);
+        expect(index.getPostings(term).toArray()).toEqual([]);
+        expect(index.getPostings(term).hasNext()).toBe(false);
+        expect(index.getPositions(term, 0).toArray()).toEqual([]);
+        expect(index.getPositions(term, 0).hasNext()).toBe(false);
         expect(index.getTermFrequency(term, 0)).toBe(0);
         expect(index.getDocumentFrequency(term)).toBe(0);
       },
@@ -109,7 +103,7 @@ describe('InvertedIndex', () => {
       expect(second.getAllDocIds()).toEqual(first.getAllDocIds());
       expect(second.termCount).toBe(first.termCount);
       for (const term of SAMPLE_TERMS) {
-        expect(second.getPostings(term)).toEqual(first.getPostings(term));
+        expect(second.getPostings(term).toArray()).toEqual(first.getPostings(term).toArray());
       }
       for (const docId of first.getAllDocIds()) {
         expect(second.getDocument(docId)).toEqual(first.getDocument(docId));
@@ -173,6 +167,7 @@ describe('InvertedIndex', () => {
       expect(index.documentCount).toBe(1);
       expect(index.termCount).toBe(1);
       expect(index.hasTerm('dog')).toBe(false);
+      expect(index.getPostings('dog').toArray()).toEqual([]);
       expect(index.getDocumentFrequency('cat')).toBe(1);
       expect(index.averageDocumentLength).toBe(1);
     });
@@ -200,6 +195,52 @@ describe('InvertedIndex', () => {
         expect(index.documentCount).toBe(2);
       },
     );
+  });
+
+  describe('token position validation', () => {
+    test.each([
+      { name: 'zero position', tokens: [{ term: 'cat', position: 0 }] },
+      { name: 'negative position', tokens: [{ term: 'cat', position: -1 }] },
+      { name: 'non-integer position', tokens: [{ term: 'cat', position: 1.5 }] },
+      { name: 'NaN position', tokens: [{ term: 'cat', position: Number.NaN }] },
+      {
+        name: 'duplicate positions',
+        tokens: [
+          { term: 'cat', position: 1 },
+          { term: 'dog', position: 1 },
+        ],
+      },
+      {
+        name: 'unsorted descending positions',
+        tokens: [
+          { term: 'cat', position: 3 },
+          { term: 'dog', position: 2 },
+        ],
+      },
+    ])('should throw InvalidTokenPositionError on $name', ({ tokens }) => {
+      const index = new InvertedIndex();
+
+      expect(() => index.addDocument('a.txt', tokens)).toThrow(InvalidTokenPositionError);
+    });
+
+    test('should leave the index unchanged after rejecting invalid token positions', () => {
+      const index = new InvertedIndex();
+      index.addDocument('a.txt', toTokens('cat'));
+
+      expect(() =>
+        index.addDocument('b.txt', [
+          { term: 'dog', position: 2 },
+          { term: 'fish', position: 1 },
+        ]),
+      ).toThrow(InvalidTokenPositionError);
+
+      expect(index.documentCount).toBe(1);
+      expect(index.termCount).toBe(1);
+      expect(index.hasTerm('dog')).toBe(false);
+      expect(index.hasTerm('fish')).toBe(false);
+      expect(index.averageDocumentLength).toBe(1);
+      expect(index.addDocument('b.txt', toTokens('bird'))).toBe(1);
+    });
   });
 
   describe('document length', () => {
@@ -263,7 +304,12 @@ describe('InvertedIndex', () => {
       const lastId = index.addDocument('c.txt', toTokens('cat'));
 
       expect(lastId).toBe(2);
-      expect(index.getPostings('cat').map((p) => p.docId)).toEqual([0, 2]);
+      expect(
+        index
+          .getPostings('cat')
+          .toArray()
+          .map((p) => p.docId),
+      ).toEqual([0, 2]);
       expect(index.getAllDocIds()).toEqual([0, 1, 2]);
     });
 
@@ -272,7 +318,7 @@ describe('InvertedIndex', () => {
       const id = index.addDocument('one.txt', toTokens('cat'));
 
       expect(index.getDocument(id)?.length).toBe(1);
-      expect(index.getPostings('cat')).toEqual([{ docId: 0, positions: [1] }]);
+      expect(index.getPostings('cat').toArray()).toEqual([{ docId: 0, positions: [1] }]);
       expect(index.termCount).toBe(1);
     });
   });
@@ -281,13 +327,27 @@ describe('InvertedIndex', () => {
     test('should store a posting with the DocId and all positions of the term', () => {
       const index = buildIndex([['a.txt', 'cat dog cat']]);
 
-      expect(index.getPostings('cat')).toEqual([{ docId: 0, positions: [1, 3] }]);
-      expect(index.getPostings('dog')).toEqual([{ docId: 0, positions: [2] }]);
+      expect(index.getPostings('cat').toArray()).toEqual([{ docId: 0, positions: [1, 3] }]);
+      expect(index.getPostings('dog').toArray()).toEqual([{ docId: 0, positions: [2] }]);
+    });
+
+    test('should iterate postings and positions via cursor methods and for..of', () => {
+      const index = buildIndex(SAMPLE_DOCS);
+
+      const postingsCursor = index.getPostings('cat');
+      expect(postingsCursor.hasNext()).toBe(true);
+      expect(postingsCursor.next()).toEqual({ docId: 0, positions: [1, 3, 4] });
+      expect(postingsCursor.current()).toEqual({ docId: 0, positions: [1, 3, 4] });
+      expect(postingsCursor.next()).toEqual({ docId: 1, positions: [1] });
+      expect(postingsCursor.hasNext()).toBe(false);
+      expect(postingsCursor.next()).toBeUndefined();
+
+      expect([...index.getPositions('cat', 0)]).toEqual([1, 3, 4]);
     });
 
     test('should keep positions within a document 1-based and strictly ascending', () => {
       const index = buildIndex([['a.txt', 'cat dog cat bird cat']]);
-      const positions = index.getPositions('cat', 0);
+      const positions = index.getPositions('cat', 0).toArray();
 
       expect(positions).toEqual([1, 3, 5]);
       expect(Math.min(...positions)).toBeGreaterThanOrEqual(1);
@@ -303,9 +363,9 @@ describe('InvertedIndex', () => {
       const index = new InvertedIndex();
       index.addDocument('a.txt', tokens);
 
-      expect(index.getPositions('fox', 0)).toEqual([1]);
-      expect(index.getPositions('hound', 0)).toEqual([4]);
-      expect(index.getPositions('jumps', 0)).toEqual([5]);
+      expect(index.getPositions('fox', 0).toArray()).toEqual([1]);
+      expect(index.getPositions('hound', 0).toArray()).toEqual([4]);
+      expect(index.getPositions('jumps', 0).toArray()).toEqual([5]);
     });
 
     test('should list postings ordered by DocId ascending', () => {
@@ -316,8 +376,18 @@ describe('InvertedIndex', () => {
         ['d3.txt', 'cat'],
       ]);
 
-      expect(index.getPostings('cat').map((p) => p.docId)).toEqual([0, 2, 3]);
-      expect(index.getPostings('dog').map((p) => p.docId)).toEqual([1, 2]);
+      expect(
+        index
+          .getPostings('cat')
+          .toArray()
+          .map((p) => p.docId),
+      ).toEqual([0, 2, 3]);
+      expect(
+        index
+          .getPostings('dog')
+          .toArray()
+          .map((p) => p.docId),
+      ).toEqual([1, 2]);
     });
 
     test('should contain only documents that include the term', () => {
@@ -326,8 +396,18 @@ describe('InvertedIndex', () => {
         ['d1.txt', 'dog'],
       ]);
 
-      expect(index.getPostings('cat').map((p) => p.docId)).toEqual([0]);
-      expect(index.getPostings('dog').map((p) => p.docId)).toEqual([1]);
+      expect(
+        index
+          .getPostings('cat')
+          .toArray()
+          .map((p) => p.docId),
+      ).toEqual([0]);
+      expect(
+        index
+          .getPostings('dog')
+          .toArray()
+          .map((p) => p.docId),
+      ).toEqual([1]);
     });
 
     test('should keep positions of the same term independent per document', () => {
@@ -336,7 +416,7 @@ describe('InvertedIndex', () => {
         ['d1.txt', 'dog cat cat'],
       ]);
 
-      expect(index.getPostings('cat')).toEqual([
+      expect(index.getPostings('cat').toArray()).toEqual([
         { docId: 0, positions: [1] },
         { docId: 1, positions: [2, 3] },
       ]);
@@ -350,7 +430,7 @@ describe('InvertedIndex', () => {
       ]);
 
       expect(index.hasTerm('dog')).toBe(true);
-      expect(index.getPostings('dog')).toEqual([{ docId: 2, positions: [1] }]);
+      expect(index.getPostings('dog').toArray()).toEqual([{ docId: 2, positions: [1] }]);
     });
 
     test.each([
@@ -359,6 +439,9 @@ describe('InvertedIndex', () => {
       { term: 'dog', docId: 1, expected: [] },
       { term: 'fish', docId: 0, expected: [] },
       { term: 'cat', docId: 42, expected: [] },
+      { term: 'cat', docId: -1, expected: [] },
+      { term: 'cat', docId: 1.5, expected: [] },
+      { term: 'cat', docId: Number.NaN, expected: [] },
     ])(
       'should return $expected from getPositions("$term", $docId)',
       ({ term, docId, expected }) => {
@@ -367,15 +450,16 @@ describe('InvertedIndex', () => {
           ['d1.txt', 'cat bird'],
         ]);
 
-        expect(index.getPositions(term, docId)).toEqual(expected);
+        expect(index.getPositions(term, docId).toArray()).toEqual(expected);
       },
     );
 
-    test('should return an empty postings list (not undefined, not an error) for an unknown term', () => {
+    test('should return an empty postings cursor (not undefined, not an error) for an unknown term', () => {
       const index = buildIndex(SAMPLE_DOCS);
 
       expect(() => index.getPostings('fish')).not.toThrow();
-      expect(index.getPostings('fish')).toEqual([]);
+      expect(index.getPostings('fish').toArray()).toEqual([]);
+      expect(index.getPostings('fish').hasNext()).toBe(false);
     });
   });
 
@@ -389,6 +473,9 @@ describe('InvertedIndex', () => {
       { term: 'bird', docId: 0, tf: 0 },
       { term: 'fish', docId: 0, tf: 0 },
       { term: 'cat', docId: 99, tf: 0 },
+      { term: 'cat', docId: -1, tf: 0 },
+      { term: 'cat', docId: 1.5, tf: 0 },
+      { term: 'cat', docId: Number.NaN, tf: 0 },
     ])('should return tf=$tf for "$term" in doc $docId', ({ term, docId, tf }) => {
       const index = buildIndex(SAMPLE_DOCS);
 
@@ -417,7 +504,7 @@ describe('InvertedIndex', () => {
       const index = buildIndex(SAMPLE_DOCS);
 
       for (const term of SAMPLE_TERMS) {
-        const postings = index.getPostings(term);
+        const postings = index.getPostings(term).toArray();
         expect(index.getDocumentFrequency(term)).toBe(postings.length);
         for (const posting of postings) {
           expect(index.getTermFrequency(term, posting.docId)).toBe(posting.positions.length);
@@ -497,8 +584,8 @@ describe('InvertedIndex', () => {
       ]);
 
       expect(index.termCount).toBe(2);
-      expect(index.getPositions('Cat', 0)).toEqual([1]);
-      expect(index.getPositions('cat', 0)).toEqual([2]);
+      expect(index.getPositions('Cat', 0).toArray()).toEqual([1]);
+      expect(index.getPositions('cat', 0).toArray()).toEqual([2]);
     });
 
     test.each(['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf'])(
@@ -506,14 +593,14 @@ describe('InvertedIndex', () => {
       (term) => {
         const fresh = new InvertedIndex();
         expect(fresh.hasTerm(term)).toBe(false);
-        expect(fresh.getPostings(term)).toEqual([]);
+        expect(fresh.getPostings(term).toArray()).toEqual([]);
 
         const index = new InvertedIndex();
         index.addDocument('a.txt', [{ term, position: 1 }]);
 
         expect(index.hasTerm(term)).toBe(true);
         expect(index.termCount).toBe(1);
-        expect(index.getPostings(term)).toEqual([{ docId: 0, positions: [1] }]);
+        expect(index.getPostings(term).toArray()).toEqual([{ docId: 0, positions: [1] }]);
         expect(index.getDocumentFrequency(term)).toBe(1);
       },
     );
@@ -529,68 +616,134 @@ describe('InvertedIndex', () => {
       tokens.push({ term: 'bird', position: 1 });
 
       expect(index.hasTerm('bird')).toBe(false);
-      expect(index.getPositions('cat', id)).toEqual([1]);
+      expect(index.getPositions('cat', id).toArray()).toEqual([1]);
       expect(index.getDocument(id)?.length).toBe(2);
     });
   });
-});
 
-describe('output isolation', () => {
-  test('should not alter the internal index when mutating the array returned by getPostings', () => {
-    const index = new InvertedIndex();
-    index.addDocument('a.txt', toTokens('cat dog'));
+  describe('output isolation', () => {
+    test('should not alter the internal index when mutating postings materialized from getPostings()', () => {
+      const index = new InvertedIndex();
+      index.addDocument('a.txt', toTokens('cat dog'));
 
-    const postings = index.getPostings('cat');
-    postings.push({ docId: 99, positions: [100] });
-    if (postings[0]) {
-      postings[0].positions.push(999);
-    }
+      const postings = index.getPostings('cat').toArray();
+      postings.push({ docId: 99, positions: [100] });
+      if (postings[0]) {
+        (postings[0].positions as number[]).push(999);
+        (postings[0] as Mutable<IPosting>).docId = 42;
+      }
 
-    const freshPostings = index.getPostings('cat');
-    expect(freshPostings).toHaveLength(1);
-    expect(freshPostings[0]?.docId).toBe(0);
-    expect(freshPostings[0]?.positions).toEqual([1]);
+      const yielded = index.getPostings('cat').next();
+      if (yielded) {
+        (yielded.positions as number[]).push(888);
+      }
+
+      const freshPostings = index.getPostings('cat').toArray();
+      expect(freshPostings).toHaveLength(1);
+      expect(freshPostings[0]?.docId).toBe(0);
+      expect(freshPostings[0]?.positions).toEqual([1]);
+    });
+
+    test('should not alter the internal index when mutating the array materialized from getPositions()', () => {
+      const index = new InvertedIndex();
+      index.addDocument('a.txt', toTokens('cat dog cat'));
+
+      const positions = index.getPositions('cat', 0).toArray();
+      positions.push(999);
+      positions[0] = -1;
+
+      const freshPositions = index.getPositions('cat', 0).toArray();
+      expect(freshPositions).toEqual([1, 3]);
+    });
+
+    test('should not alter the internal index when mutating the object returned by getDocument()', () => {
+      const index = new InvertedIndex();
+      index.addDocument('a.txt', toTokens('cat dog'));
+
+      const doc = index.getDocument(0);
+      expect(doc).toBeDefined();
+
+      if (doc) {
+        (doc as Mutable<IDocumentInfo>).length = 999;
+        (doc as Mutable<IDocumentInfo>).source = 'hacked.txt';
+      }
+
+      const freshDoc = index.getDocument(0);
+      expect(freshDoc?.length).toBe(2);
+      expect(freshDoc?.source).toBe('a.txt');
+    });
+
+    test('should not alter the internal index when mutating the array returned by getAllDocIds()', () => {
+      const index = new InvertedIndex();
+      index.addDocument('a.txt', toTokens('cat'));
+      index.addDocument('b.txt', toTokens('dog'));
+
+      const ids = index.getAllDocIds();
+      ids.push(99);
+      ids.pop();
+
+      const freshIds = index.getAllDocIds();
+      expect(freshIds).toEqual([0, 1]);
+    });
+
+    test('should keep previously materialized postings snapshot intact after subsequent addDocument() calls', () => {
+      const index = new InvertedIndex();
+      index.addDocument('a.txt', toTokens('cat'));
+
+      const snapshot = index.getPostings('cat').toArray();
+      index.addDocument('b.txt', toTokens('cat'));
+
+      expect(snapshot).toEqual([{ docId: 0, positions: [1] }]);
+      expect(index.getPostings('cat').toArray()).toEqual([
+        { docId: 0, positions: [1] },
+        { docId: 1, positions: [1] },
+      ]);
+    });
   });
 
-  test('should not alter the internal index when mutating the array returned by getPositions', () => {
-    const index = new InvertedIndex();
-    index.addDocument('a.txt', toTokens('cat dog cat'));
+  describe('larger collections', () => {
+    const DOC_COUNT = 300;
 
-    const positions = index.getPositions('cat', 0);
-    positions.push(999);
-    positions[0] = -1;
+    const buildLargeIndex = (): InvertedIndex => {
+      const index = new InvertedIndex();
+      for (let i = 0; i < DOC_COUNT; i++) {
+        const words = ['all'];
+        if (i % 3 === 0) words.push('three');
+        if (i % 7 === 0) words.push('seven');
+        index.addDocument(`doc${String(i).padStart(4, '0')}.txt`, toTokens(words.join(' ')));
+      }
+      return index;
+    };
 
-    const freshPositions = index.getPositions('cat', 0);
-    expect(freshPositions).toEqual([1, 3]);
-  });
+    test.each([
+      { term: 'all', divisor: 1 },
+      { term: 'three', divisor: 3 },
+      { term: 'seven', divisor: 7 },
+    ])(
+      'should compute df and ascending postings for "$term" (present in every $divisor-th document)',
+      ({ term, divisor }) => {
+        const index = buildLargeIndex();
+        const docIds = index
+          .getPostings(term)
+          .toArray()
+          .map((p) => p.docId);
 
-  test('should not alter the internal index when mutating the object returned by getDocument', () => {
-    const index = new InvertedIndex();
-    index.addDocument('a.txt', toTokens('cat dog'));
+        expect(index.getDocumentFrequency(term)).toBe(Math.ceil(DOC_COUNT / divisor));
+        expect(docIds).toEqual([...docIds].sort((a, b) => a - b));
+        expect(new Set(docIds).size).toBe(docIds.length);
+        expect(docIds.every((id) => id % divisor === 0)).toBe(true);
+      },
+    );
 
-    const doc = index.getDocument(0);
-    expect(doc).toBeDefined();
+    test('should keep documentCount, DocIds and average length consistent', () => {
+      const index = buildLargeIndex();
+      const totalLength = index
+        .getAllDocIds()
+        .reduce((acc, id) => acc + (index.getDocument(id)?.length ?? 0), 0);
 
-    if (doc) {
-      (doc as any).length = 999;
-      (doc as any).source = 'hacked.txt';
-    }
-
-    const freshDoc = index.getDocument(0);
-    expect(freshDoc?.length).toBe(2);
-    expect(freshDoc?.source).toBe('a.txt');
-  });
-
-  test('should not alter the internal index when mutating the array returned by getAllDocIds', () => {
-    const index = new InvertedIndex();
-    index.addDocument('a.txt', toTokens('cat'));
-    index.addDocument('b.txt', toTokens('dog'));
-
-    const ids = index.getAllDocIds();
-    ids.push(99);
-    ids.pop();
-
-    const freshIds = index.getAllDocIds();
-    expect(freshIds).toEqual([0, 1]);
+      expect(index.documentCount).toBe(DOC_COUNT);
+      expect(index.getAllDocIds()).toEqual(Array.from({ length: DOC_COUNT }, (_, i) => i));
+      expect(index.averageDocumentLength).toBeCloseTo(totalLength / DOC_COUNT, 10);
+    });
   });
 });
