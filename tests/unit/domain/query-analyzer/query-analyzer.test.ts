@@ -1,10 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
-import {
-  analyzeQuery,
-  type ExecutableQueryNode,
-} from '../../../../src/domain/query-analyzer/public-api.js';
-import { parseQuery, type QueryNode } from '../../../../src/domain/query-parser/public-api.js';
+import { analyzeQuery } from '../../../../src/domain/query-analyzer/public-api.js';
+import { parseQuery } from '../../../../src/domain/query-parser/public-api.js';
 
 describe('Domain QueryAnalyzer', () => {
   describe(analyzeQuery.name, () => {
