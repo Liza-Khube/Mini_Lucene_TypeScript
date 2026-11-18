@@ -1,6 +1,7 @@
 type SuffixRule = readonly [suffix: string, replacement: string];
 
 const VOWELS: ReadonlySet<string> = new Set(['a', 'e', 'i', 'o', 'u']);
+const MIN_STEMMABLE_LENGTH = 3;
 
 const STEP2_RULES: readonly SuffixRule[] = byLongestSuffix([
   ['ational', 'ate'],
@@ -61,7 +62,9 @@ const STEP4_RULES: readonly SuffixRule[] = byLongestSuffix(
 );
 
 export function stem(word: string): string {
-  if (word.length <= 2) return word;
+  if (word.length < MIN_STEMMABLE_LENGTH) {
+    return word;
+  }
 
   let result = step1a(word);
   result = step1b(result);
@@ -71,15 +74,21 @@ export function stem(word: string): string {
   result = step4(result);
   result = step5a(result);
   result = step5b(result);
+
   return result;
 }
 
 /** sses → ss, ies → i, ss → ss, s → ''. */
 function step1a(word: string): string {
-  if (word.endsWith('sses')) return word.slice(0, -2);
-  if (word.endsWith('ies')) return word.slice(0, -2);
-  if (word.endsWith('ss')) return word;
-  if (word.endsWith('s')) return word.slice(0, -1);
+  if (word.endsWith('sses') || word.endsWith('ies')) {
+    return word.slice(0, -2);
+  }
+  if (word.endsWith('ss')) {
+    return word;
+  }
+  if (word.endsWith('s')) {
+    return word.slice(0, -1);
+  }
   return word;
 }
 
@@ -91,7 +100,9 @@ function step1b(word: string): string {
   }
 
   for (const suffix of ['ed', 'ing']) {
-    if (!word.endsWith(suffix)) continue;
+    if (!word.endsWith(suffix)) {
+      continue;
+    }
     const base = word.slice(0, -suffix.length);
     return hasVowel(base) ? restoreEnding(base) : word;
   }
@@ -101,27 +112,39 @@ function step1b(word: string): string {
 
 /** at → ate, bl → ble, iz → ize, undouble, or add e. */
 function restoreEnding(base: string): string {
-  if (base.endsWith('at') || base.endsWith('bl') || base.endsWith('iz')) return `${base}e`;
-
-  if (endsWithDoubleConsonant(base) && !/[lsz]$/.test(base)) return base.slice(0, -1);
-
-  if (measure(base) === 1 && endsWithCvc(base)) return `${base}e`;
-
+  if (base.endsWith('at') || base.endsWith('bl') || base.endsWith('iz')) {
+    return `${base}e`;
+  }
+  if (endsWithDoubleConsonant(base) && !/[lsz]$/.test(base)) {
+    return base.slice(0, -1);
+  }
+  if (measure(base) === 1 && endsWithCvc(base)) {
+    return `${base}e`;
+  }
   return base;
 }
 
 /** (*v*) y → i. */
 function step1c(word: string): string {
-  if (word.endsWith('y') && hasVowel(word.slice(0, -1))) return `${word.slice(0, -1)}i`;
+  if (word.endsWith('y')) {
+    const base = word.slice(0, -1);
+    if (hasVowel(base)) {
+      return `${base}i`;
+    }
+  }
   return word;
 }
 
 /** (m > 1) removes a suffix; -ion only after s or t. */
 function step4(word: string): string {
   for (const [suffix] of STEP4_RULES) {
-    if (!word.endsWith(suffix)) continue;
+    if (!word.endsWith(suffix)) {
+      continue;
+    }
     const base = word.slice(0, -suffix.length);
-    if (suffix === 'ion' && !/[st]$/.test(base)) continue;
+    if (suffix === 'ion' && !/[st]$/.test(base)) {
+      continue;
+    }
     return measure(base) > 1 ? base : word;
   }
   return word;
@@ -129,15 +152,22 @@ function step4(word: string): string {
 
 /** (m > 1) e → ''; (m = 1 and not *o) e → ''. */
 function step5a(word: string): string {
-  if (!word.endsWith('e')) return word;
+  if (!word.endsWith('e')) {
+    return word;
+  }
   const base = word.slice(0, -1);
-  const m = measure(base);
-  return m > 1 || (m === 1 && !endsWithCvc(base)) ? base : word;
+  const vcCount = measure(base);
+  if (vcCount > 1 || (vcCount === 1 && !endsWithCvc(base))) {
+    return base;
+  }
+  return word;
 }
 
 /** (m > 1 and *d and *L) ll → l. */
 function step5b(word: string): string {
-  if (word.endsWith('ll') && measure(word) > 1) return word.slice(0, -1);
+  if (word.endsWith('ll') && measure(word) > 1) {
+    return word.slice(0, -1);
+  }
   return word;
 }
 
@@ -147,7 +177,9 @@ function applyFirstMatchingRule(
   minMeasure: number,
 ): string {
   for (const [suffix, replacement] of rules) {
-    if (!word.endsWith(suffix)) continue;
+    if (!word.endsWith(suffix)) {
+      continue;
+    }
     const base = word.slice(0, -suffix.length);
     return measure(base) > minMeasure ? base + replacement : word;
   }
@@ -161,21 +193,27 @@ function byLongestSuffix(rules: readonly SuffixRule[]): readonly SuffixRule[] {
 function consonantMask(word: string): boolean[] {
   const mask: boolean[] = [];
   for (let i = 0; i < word.length; i++) {
-    const letter = word[i]!;
-    if (VOWELS.has(letter)) mask.push(false);
-    else if (letter === 'y') mask.push(i === 0 || !mask[i - 1]);
-    else mask.push(true);
+    const letter = word.charAt(i);
+    if (VOWELS.has(letter)) {
+      mask.push(false);
+    } else if (letter === 'y') {
+      mask.push(i === 0 || mask[i - 1] === false);
+    } else {
+      mask.push(true);
+    }
   }
   return mask;
 }
 
 function measure(word: string): number {
   const mask = consonantMask(word);
-  let m = 0;
+  let vcCount = 0;
   for (let i = 1; i < mask.length; i++) {
-    if (!mask[i - 1] && mask[i]) m++;
+    if (mask[i - 1] === false && mask[i] === true) {
+      vcCount += 1;
+    }
   }
-  return m;
+  return vcCount;
 }
 
 function hasVowel(word: string): boolean {
@@ -183,15 +221,25 @@ function hasVowel(word: string): boolean {
 }
 
 function endsWithDoubleConsonant(word: string): boolean {
-  const n = word.length;
-  return n >= 2 && word[n - 1] === word[n - 2] && consonantMask(word)[n - 1] === true;
+  const length = word.length;
+  if (length < 2) {
+    return false;
+  }
+  return (
+    word.charAt(length - 1) === word.charAt(length - 2) && consonantMask(word)[length - 1] === true
+  );
 }
 
 function endsWithCvc(word: string): boolean {
-  const n = word.length;
-  if (n < 3) return false;
+  const length = word.length;
+  if (length < 3) {
+    return false;
+  }
   const mask = consonantMask(word);
   return (
-    mask[n - 3] === true && mask[n - 2] === false && mask[n - 1] === true && !/[wxy]$/.test(word)
+    mask[length - 3] === true &&
+    mask[length - 2] === false &&
+    mask[length - 1] === true &&
+    !/[wxy]$/.test(word)
   );
 }

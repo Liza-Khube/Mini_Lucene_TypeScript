@@ -6,6 +6,9 @@ export class TextAnalyzer {
   analyze(text: string): IToken[] {
     return tokenize(text)
       .filter((token) => !isStopWord(token.term))
-      .map((token) => ({ term: stem(token.term), position: token.position }));
+      .map((token) => ({
+        term: stem(token.term),
+        position: token.position,
+      }));
   }
 }
