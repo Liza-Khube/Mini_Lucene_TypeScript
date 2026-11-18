@@ -1,7 +1,5 @@
-export interface IToken {
-  readonly term: string;
-  readonly position: number;
-}
+import type { IToken } from '../../data/inverted-index/public-api.js';
+export type { IToken };
 
 export function tokenize(text: string): IToken[] {
   const normalizedText = text.toLowerCase();
