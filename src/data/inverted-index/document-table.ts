@@ -1,4 +1,3 @@
-import { DuplicateSourceError } from './errors.js';
 import type { DocId, IDocumentInfo } from './types.js';
 
 export class DocumentTable {
@@ -11,10 +10,6 @@ export class DocumentTable {
   }
 
   add(source: string, length: number): DocId {
-    if (this.sources.has(source)) {
-      throw new DuplicateSourceError(source);
-    }
-
     const docId: DocId = this.documents.length;
     this.sources.set(source, docId);
     this.documents.push({ docId, source, length });
