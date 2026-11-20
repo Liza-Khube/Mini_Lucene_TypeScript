@@ -21,6 +21,11 @@ export class CommandShell {
   }
 
   async run(): Promise<void> {
+    let isClosed = false;
+    this.readline.once('close', () => {
+      isClosed = true;
+    });
+
     this.print('Mini-Lucene Search Engine');
     this.readline.setPrompt('> ');
     this.readline.prompt();
@@ -32,7 +37,9 @@ export class CommandShell {
       } catch (error: unknown) {
         this.print(`Error: ${error instanceof Error ? error.message : String(error)}`);
       }
+      if (!isClosed) {
       this.readline.prompt();
+      }
     }
 
     this.readline.close();
