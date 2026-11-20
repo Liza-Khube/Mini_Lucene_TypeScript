@@ -2,20 +2,26 @@ import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import type { Readable, Writable } from 'node:stream';
 
+import type {
+  IIndexResult,
+  IIndexStats,
+  ISearchEngine,
+  SearchResult,
+} from '../application/search-engine/public-api.js';
 import { isCommandTakeArgs, formatHelpOutput, getCommandUsage } from './commands.js';
 import { parseCommandInput, type ParsedCommandInput } from './command-input-parser.js';
 
 export class CommandShell {
-  // TODO  private readonly engine: SearchEngineApi;
+  private readonly engine: ISearchEngine;
   private readonly readline;
   private readonly output: Writable;
 
   constructor(
-    // TODO engine: SearchEngineApi,
+    engine: ISearchEngine,
     output: Writable = stdout,
     input: Readable = stdin,
   ) {
-    // TODO this.engine = engine,
+    this.engine = engine;
     this.output = output;
     this.readline = createInterface({ input, output });
   }
@@ -38,7 +44,7 @@ export class CommandShell {
         this.print(`Error: ${error instanceof Error ? error.message : String(error)}`);
       }
       if (!isClosed) {
-      this.readline.prompt();
+        this.readline.prompt();
       }
     }
 
@@ -62,13 +68,13 @@ export class CommandShell {
 
     switch (name) {
       case 'index':
-        // TODO: await this.engine.index(args)
+        this.print(this.formatIndexResult(await this.engine.index(args)));
         break;
       case 'search':
-        // TODO: await this.engine.search(args)
+        this.print(this.formatSearchResult(this.engine.search(args)));
         break;
       case 'stats':
-        //TODO: await this.engine.stats()
+        this.print(this.formatStats(this.engine.stats()));
         break;
       case 'help':
         this.print(formatHelpOutput());
@@ -77,6 +83,43 @@ export class CommandShell {
         return false;
     }
     return true;
+  }
+
+  private formatIndexResult(result: IIndexResult): string {
+    const lines: string[] = result.skippedFiles.map(
+      (file) => `Warning: skipped ${file.path}: ${file.reason}`,
+    );
+    const docLabel = result.documentCount === 1 ? 'document' : 'documents';
+    const termLabel = result.termCount === 1 ? 'term' : 'terms';
+    lines.push(
+      `Indexed ${result.documentCount} ${docLabel}, ${result.termCount} unique ${termLabel} (${result.durationMs.toFixed(1)} ms)`,
+    );
+    return lines.join('\n');
+  }
+
+  private formatSearchResult(result: SearchResult): string {
+    if (result.status !== 'ok') {
+      return result.message;
+    }
+
+    const docLabel = result.totalHits === 1 ? 'document' : 'documents';
+    const lines: string[] = [
+      `Found ${result.totalHits} ${docLabel} in ${result.durationMs.toFixed(1)} ms`,
+    ];
+
+    for (const hit of result.hits) {
+      lines.push(`${hit.rank}. ${hit.source} score=${hit.score.toFixed(2)}`);
+      for (const match of hit.matches) {
+        const positionLabel = match.positions.length === 1 ? 'position' : 'positions';
+        lines.push(`"${match.term}" - ${positionLabel} ${match.positions.join(', ')}`);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  private formatStats(stats: IIndexStats): string {
+    return `Documents: ${stats.documentCount}\nUnique terms: ${stats.termCount}`;
   }
 
   private print(text: string): void {
