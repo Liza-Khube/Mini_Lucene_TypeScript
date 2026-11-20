@@ -31,10 +31,6 @@ export class DocumentTable {
     return doc === undefined ? undefined : { ...doc };
   }
 
-  getDocIdBySource(source: string): DocId | undefined {
-    return this.sources.get(source);
-  }
-
   get count(): number {
     return this.documents.length;
   }
