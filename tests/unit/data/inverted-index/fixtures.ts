@@ -1,5 +1,4 @@
-import { InvertedIndex } from '../../../../src/data/inverted-index/public-api.js';
-import type { IToken } from '../../../../src/data/inverted-index/public-api.js';
+import { InvertedIndex, type IToken } from '../../../../src/data/inverted-index/public-api.js';
 
 export type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 

@@ -20,7 +20,7 @@ import {
   type Mutable,
 } from './fixtures.js';
 
-describe('InvertedIndex', () => {
+describe('Data InvertedIndex', () => {
   describe('empty index', () => {
     test('should report zero documents, zero terms and zero average document length', () => {
       const index = new InvertedIndex();
@@ -31,10 +31,11 @@ describe('InvertedIndex', () => {
       expect(Number.isNaN(index.averageDocumentLength)).toBe(false);
     });
 
-    test('should have no DocIds', () => {
+    test('should have no DocIds and return undefined from getDocument()', () => {
       const index = new InvertedIndex();
 
       expect(index.getAllDocIds()).toEqual([]);
+      expect(index.getDocument(0)).toBeUndefined();
     });
 
     test.each(['cat', '', 'two words', 'ünïcödé', '42'])(
@@ -460,6 +461,139 @@ describe('InvertedIndex', () => {
       expect(() => index.getPostings('fish')).not.toThrow();
       expect(index.getPostings('fish').toArray()).toEqual([]);
       expect(index.getPostings('fish').hasNext()).toBe(false);
+    });
+
+    test.each([
+      { docId: 0, expected: [1], tf: 1 },
+      { docId: 3, expected: [2, 4], tf: 2 },
+      { docId: 7, expected: [3], tf: 1 },
+      { docId: 1, expected: [], tf: 0 },
+      { docId: 4, expected: [], tf: 0 },
+      { docId: 99, expected: [], tf: 0 },
+      { docId: -1, expected: [], tf: 0 },
+      { docId: 1.5, expected: [], tf: 0 },
+      { docId: Number.NaN, expected: [], tf: 0 },
+    ])(
+      'should look up positions $expected and tf=$tf across sparse postings for DocId $docId',
+      ({ docId, expected, tf }) => {
+        const index = buildIndex([
+          ['d0.txt', 'cat'],
+          ['d1.txt', 'dog'],
+          ['d2.txt', 'dog'],
+          ['d3.txt', 'dog cat dog cat'],
+          ['d4.txt', 'bird'],
+          ['d5.txt', 'bird'],
+          ['d6.txt', 'bird'],
+          ['d7.txt', 'dog bird cat'],
+        ]);
+
+        expect(index.getPositions('cat', docId).toArray()).toEqual(expected);
+        expect(index.getTermFrequency('cat', docId)).toBe(tf);
+      },
+    );
+  });
+
+  describe('cursor behavior', () => {
+    test('should handle empty cursors for unknown terms and missing DocIds', () => {
+      const index = buildIndex(SAMPLE_DOCS);
+      const cursors = [
+        index.getPostings('fish'),
+        index.getPositions('fish', 0),
+        index.getPositions('cat', 99),
+      ];
+
+      for (const cursor of cursors) {
+        expect(cursor.hasNext()).toBe(false);
+        expect(cursor.current()).toBeUndefined();
+        expect(cursor.next()).toBeUndefined();
+        expect(cursor.current()).toBeUndefined();
+        expect(cursor.toArray()).toEqual([]);
+        expect([...cursor]).toEqual([]);
+
+        cursor.reset();
+        expect(cursor.hasNext()).toBe(false);
+        expect(cursor.current()).toBeUndefined();
+        expect(cursor.next()).toBeUndefined();
+      }
+    });
+
+    test('should return undefined from current() before the first next() call', () => {
+      const index = buildIndex(SAMPLE_DOCS);
+      const postingsCursor = index.getPostings('cat');
+      const positionsCursor = index.getPositions('cat', 0);
+
+      expect(postingsCursor.current()).toBeUndefined();
+      expect(postingsCursor.hasNext()).toBe(true);
+      expect(positionsCursor.current()).toBeUndefined();
+      expect(positionsCursor.hasNext()).toBe(true);
+    });
+
+    test('should advance sequentially, keep returning undefined after exhaustion, and restart on reset()', () => {
+      const index = buildIndex(SAMPLE_DOCS);
+      const cursor = index.getPostings('cat');
+
+      expect(cursor.hasNext()).toBe(true);
+      expect(cursor.next()).toEqual({ docId: 0, positions: [1, 3, 4] });
+      expect(cursor.current()).toEqual({ docId: 0, positions: [1, 3, 4] });
+
+      expect(cursor.hasNext()).toBe(true);
+      expect(cursor.next()).toEqual({ docId: 1, positions: [1] });
+      expect(cursor.current()).toEqual({ docId: 1, positions: [1] });
+
+      expect(cursor.hasNext()).toBe(false);
+      expect(cursor.next()).toBeUndefined();
+      expect(cursor.current()).toBeUndefined();
+      expect(cursor.next()).toBeUndefined();
+      expect(cursor.hasNext()).toBe(false);
+      expect(cursor.current()).toBeUndefined();
+
+      cursor.reset();
+
+      expect(cursor.current()).toBeUndefined();
+      expect(cursor.hasNext()).toBe(true);
+      expect(cursor.next()).toEqual({ docId: 0, positions: [1, 3, 4] });
+      expect(cursor.current()).toEqual({ docId: 0, positions: [1, 3, 4] });
+    });
+
+    test('should support for..of, spread, and toArray() without altering manual cursor position', () => {
+      const index = buildIndex(SAMPLE_DOCS);
+      const cursor = index.getPositions('cat', 0);
+
+      expect(cursor.next()).toBe(1);
+
+      const collected: number[] = [];
+      for (const position of cursor) {
+        collected.push(position);
+      }
+
+      expect(collected).toEqual([1, 3, 4]);
+      expect([...cursor]).toEqual([1, 3, 4]);
+
+      const materialized = cursor.toArray();
+      expect(materialized).toEqual([1, 3, 4]);
+      expect(cursor.current()).toBe(1);
+
+      materialized.push(999);
+      expect(cursor.toArray()).toEqual([1, 3, 4]);
+    });
+
+    test('should isolate internal postings when mutating items yielded via next() or for..of', () => {
+      const index = buildIndex([['a.txt', 'cat dog cat']]);
+      const cursor = index.getPostings('cat');
+
+      const first = cursor.next();
+      expect(first).toEqual({ docId: 0, positions: [1, 3] });
+      (first!.positions as number[]).push(99);
+      (first as Mutable<IPosting>).docId = 42;
+
+      for (const posting of cursor) {
+        (posting.positions as number[]).push(77);
+        (posting as Mutable<IPosting>).docId = 13;
+      }
+
+      cursor.reset();
+      expect(cursor.next()).toEqual({ docId: 0, positions: [1, 3] });
+      expect(index.getPostings('cat').toArray()).toEqual([{ docId: 0, positions: [1, 3] }]);
     });
   });
 
