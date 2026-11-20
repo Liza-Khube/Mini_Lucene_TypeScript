@@ -2,7 +2,7 @@ import type { DocId, IDocumentInfo } from './types.js';
 
 export class DocumentTable {
   private readonly documents: IDocumentInfo[] = [];
-  private readonly sources = new Map<string, DocId>();
+  private readonly sources = new Set<string>();
   private totalTokens = 0;
 
   hasSource(source: string): boolean {
@@ -11,7 +11,7 @@ export class DocumentTable {
 
   add(source: string, length: number): DocId {
     const docId: DocId = this.documents.length;
-    this.sources.set(source, docId);
+    this.sources.add(source);
     this.documents.push({ docId, source, length });
     this.totalTokens += length;
 
