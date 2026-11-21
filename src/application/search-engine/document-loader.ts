@@ -4,8 +4,8 @@ import { extname, join } from 'node:path';
 import { IndexDirectoryError } from './errors.js';
 import type { IDocumentInput, ISkippedFile } from './types.js';
 
-export const SUPPORTED_EXTENSION = '.txt';
-export const UNSUPPORTED_FILE_FORMAT_REASON =
+const SUPPORTED_EXTENSION = '.txt';
+const UNSUPPORTED_FILE_FORMAT_REASON =
   'Unsupported file format (only .txt files are supported)';
 
 export interface ILoadedDirectory {
@@ -48,7 +48,7 @@ export function compareCodePoints(a: string, b: string): number {
   return 0;
 }
 
-export function isSupportedTextFile(fileName: string): boolean {
+function isSupportedTextFile(fileName: string): boolean {
   return extname(fileName).toLowerCase() === SUPPORTED_EXTENSION;
 }
 
@@ -67,7 +67,7 @@ function trimTrailingSeparators(rootPath: string): string {
   return rootPath.slice(0, end);
 }
 
-export function formatDocumentSource(
+function formatDocumentSource(
   rootPath: string,
   relativeSegments: readonly string[],
 ): string {
