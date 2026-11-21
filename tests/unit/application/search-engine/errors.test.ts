@@ -1,3 +1,4 @@
+import { symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
 import {
@@ -105,6 +106,46 @@ describe('Application SearchEngine Errors', () => {
         expect(engine.search('kept').hits.map((hit) => hit.source)).toStrictEqual([
           join(corpus.dirPath, 'file.txt'),
         ]);
+      } finally {
+        await corpus.cleanup();
+      }
+    });
+
+    test('should wrap non-ENOENT path errors into IndexDirectoryError with cause', async () => {
+      const invalidPath = 'invalid\0path';
+      const engine = new SearchEngine();
+
+      let caught: unknown;
+      try {
+        await engine.index(invalidPath);
+      } catch (error: unknown) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(IndexDirectoryError);
+      expect((caught as IndexDirectoryError).directoryPath).toBe(invalidPath);
+      expect((caught as IndexDirectoryError).cause).toBeDefined();
+    });
+
+    test('should wrap non-ENOENT symlink stat errors such as ELOOP into IndexDirectoryError', async () => {
+      const corpus = await createTempCorpus({});
+      try {
+        const linkA = join(corpus.dirPath, 'a');
+        const linkB = join(corpus.dirPath, 'b');
+        await symlink(linkB, linkA, 'junction');
+        await symlink(linkA, linkB, 'junction');
+
+        const engine = new SearchEngine();
+        let caught: unknown;
+        try {
+          await engine.index(corpus.dirPath);
+        } catch (error: unknown) {
+          caught = error;
+        }
+
+        expect(caught).toBeInstanceOf(IndexDirectoryError);
+        expect((caught as IndexDirectoryError).directoryPath).toBe(corpus.dirPath);
+        expect((caught as IndexDirectoryError).cause).toBeDefined();
       } finally {
         await corpus.cleanup();
       }

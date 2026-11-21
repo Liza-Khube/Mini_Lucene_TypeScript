@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { IDocumentInput } from '../../../../src/application/search-engine/public-api.js';
 
-export interface IInvalidTopKCase {
+interface IInvalidTopKCase {
   readonly name: string;
   readonly topK: number;
 }
 
-export interface ITempCorpus {
+interface ITempCorpus {
   readonly dirPath: string;
   cleanup(): Promise<void>;
 }
