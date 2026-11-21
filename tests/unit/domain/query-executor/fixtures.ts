@@ -1,9 +1,7 @@
-import {
-  ReadonlyArrayCursor,
-  createEmptyCursor,
-  type DocId,
-  type ICursor,
-  type IPosting,
+import type {
+  DocId,
+  ICursor,
+  IPosting,
 } from '../../../../src/data/inverted-index/public-api.js';
 import type { ExecutableQueryNode } from '../../../../src/domain/query-analyzer/public-api.js';
 import {
@@ -46,6 +44,29 @@ export const not = (operand: ExecutableQueryNode): ExecutableQueryNode => ({
 export const nestNot = (depth: number, inner: ExecutableQueryNode): ExecutableQueryNode =>
   Array.from({ length: depth }).reduce<ExecutableQueryNode>((node) => not(node), inner);
 
+function createCursor<T>(items: readonly T[]): ICursor<T> {
+  let index = -1;
+  return {
+    hasNext: () => index + 1 < items.length,
+    next: () => {
+      if (index + 1 >= items.length) {
+        index = items.length;
+        return undefined;
+      }
+      index += 1;
+      return items[index];
+    },
+    current: () => (index >= 0 && index < items.length ? items[index] : undefined),
+    reset: () => {
+      index = -1;
+    },
+    toArray: () => [...items],
+    *[Symbol.iterator]() {
+      yield* items;
+    },
+  };
+}
+
 export const buildIndex = (docs: readonly string[]): IQueryIndex => {
   const postings = new Map<string, IPosting[]>();
 
@@ -71,10 +92,7 @@ export const buildIndex = (docs: readonly string[]): IQueryIndex => {
 
   return {
     documentCount: docs.length,
-    getPostings: (value): ICursor<IPosting> => {
-      const list = postings.get(value);
-      return list === undefined ? createEmptyCursor<IPosting>() : new ReadonlyArrayCursor(list);
-    },
+    getPostings: (value): ICursor<IPosting> => createCursor(postings.get(value) ?? []),
   };
 };
 
