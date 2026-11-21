@@ -1,4 +1,4 @@
-export const STOP_WORDS: ReadonlySet<string> = new Set([
+const STOP_WORDS: ReadonlySet<string> = new Set([
   'a',
   'an',
   'and',

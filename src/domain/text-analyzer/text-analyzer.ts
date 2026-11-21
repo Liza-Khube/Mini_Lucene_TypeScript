@@ -1,4 +1,4 @@
-import type { IToken } from './tokenizer.js';
+import type { IToken } from '../../data/inverted-index/public-api.js';
 import { stem } from './porter-stemmer.js';
 import { isStopWord } from './stop-words.js';
 import { tokenize } from './tokenizer.js';
