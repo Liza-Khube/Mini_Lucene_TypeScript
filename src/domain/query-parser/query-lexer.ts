@@ -1,5 +1,13 @@
 import { ParseError } from './error.js';
-import type { QueryToken } from './types.js';
+
+export type QueryToken =
+  | { readonly type: 'TERM'; readonly value: string }
+  | { readonly type: 'PHRASE'; readonly terms: readonly string[] }
+  | { readonly type: 'AND' }
+  | { readonly type: 'OR' }
+  | { readonly type: 'NOT' }
+  | { readonly type: 'LPAREN' }
+  | { readonly type: 'RPAREN' };
 
 function isAsciiAlnum(ch: string): boolean {
   return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9');

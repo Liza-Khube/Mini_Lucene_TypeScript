@@ -3,9 +3,8 @@ import {
   MAX_NESTING_DEPTH,
   ParseError,
   parseQuery,
-  type QueryNode,
 } from '../../../../src/domain/query-parser/public-api.js';
-import { and, nest, not, or, phrase, term, termsInOrder } from './fixtures.js';
+import { and, nest, not, or, phrase, term } from './fixtures.js';
 
 describe('Domain QueryParser', () => {
   describe(parseQuery.name, () => {
@@ -131,6 +130,10 @@ describe('Domain QueryParser', () => {
         { query: 'cat OR NOT dog', expected: or(term('cat'), not(term('dog'))) },
         { query: 'NOT cat AND NOT dog', expected: and(not(term('cat')), not(term('dog'))) },
         { query: 'NOT NOT cat', expected: not(not(term('cat'))) },
+        {
+          query: 'cat AND dog OR NOT bird',
+          expected: or(and(term('cat'), term('dog')), not(term('bird'))),
+        },
       ])(
         'should parse the uppercase operator query $query into the expected AST',
         ({ query, expected }) => {
@@ -147,6 +150,7 @@ describe('Domain QueryParser', () => {
         { messy: 'cat AND(dog OR bird)', clean: 'cat AND (dog OR bird)' },
         { messy: 'NOT(cat)', clean: 'NOT cat' },
         { messy: '(  cat  )', clean: '(cat)' },
+        { messy: '(cat)AND(dog OR NOT(bird))', clean: '(cat) AND (dog OR NOT (bird))' },
       ])('should parse $messy the same way as the normalized $clean', ({ messy, clean }) => {
         expect(parseQuery(messy)).toStrictEqual(parseQuery(clean));
       });
@@ -165,6 +169,10 @@ describe('Domain QueryParser', () => {
         {
           query: '"brown pillow""red cat"',
           expected: and(phrase('brown', 'pillow'), phrase('red', 'cat')),
+        },
+        {
+          query: '"brown pillow""red cat"dog',
+          expected: and(and(phrase('brown', 'pillow'), phrase('red', 'cat')), term('dog')),
         },
       ])('should join adjacent operands of $query with AND', ({ query, expected }) => {
         expect(parseQuery(query)).toStrictEqual(expected);

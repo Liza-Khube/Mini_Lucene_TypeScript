@@ -8,11 +8,3 @@ export const not = (operand: QueryNode): QueryNode => ({ type: 'not', operand })
 
 export const nest = (depth: number, inner: string): string =>
   '('.repeat(depth) + inner + ')'.repeat(depth);
-
-export const termsInOrder = (node: QueryNode): string[] => {
-  if (node.type === 'term') return [node.value];
-  if (node.type === 'and' || node.type === 'or') {
-    return [...termsInOrder(node.left), ...termsInOrder(node.right)];
-  }
-  return [];
-};

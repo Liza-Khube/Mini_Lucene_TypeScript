@@ -1,6 +1,6 @@
 import { ParseError } from './error.js';
-import { tokenizeQuery } from './query-lexer.js';
-import type { QueryNode, QueryToken } from './types.js';
+import { tokenizeQuery, type QueryToken } from './query-lexer.js';
+import type { QueryNode } from './types.js';
 
 export const MAX_NESTING_DEPTH = 50;
 
