@@ -19,9 +19,7 @@ interface IDiscoveredFile {
   readonly sortKey: string;
 }
 
-interface ISkippedEntry {
-  readonly path: string;
-  readonly reason: string;
+interface ISkippedEntry extends ISkippedFile {
   readonly sortKey: string;
 }
 
