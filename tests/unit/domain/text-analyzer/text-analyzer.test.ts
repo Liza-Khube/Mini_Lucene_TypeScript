@@ -1,8 +1,5 @@
 import { describe, test, expect, beforeEach } from 'vitest';
-import { TextAnalyzer } from '../../../../src/domain/text-analyzer/text-analyzer.js';
-import { STOP_WORDS } from '../../../../src/domain/text-analyzer/stop-words.js';
-import { tokenize } from '../../../../src/domain/text-analyzer/tokenizer.js';
-import { stem } from '../../../../src/domain/text-analyzer/porter-stemmer.js';
+import { TextAnalyzer, isStopWord, stem } from '../../../../src/domain/text-analyzer/public-api.js';
 
 const terms = (a: TextAnalyzer, text: string) => a.analyze(text).map((t) => t.term);
 

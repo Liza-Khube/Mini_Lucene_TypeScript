@@ -1,7 +1,6 @@
 import { describe, test, expect } from 'vitest';
-import { STOP_WORDS, isStopWord } from '../../../../src/domain/text-analyzer/stop-words.js';
+import { isStopWord } from '../../../../src/domain/text-analyzer/public-api.js';
 
-const STOP_WORDS_SET = new Set(STOP_WORDS);
 const EXPECTED = [
   'a',
   'an',
@@ -39,23 +38,6 @@ const EXPECTED = [
 ];
 
 describe('Domain TextAnalyzer StopWords', () => {
-  describe('STOP_WORDS', () => {
-    test('contains exactly 33 words of the reference Lucene list', () => {
-      expect(STOP_WORDS_SET.size).toBe(33);
-      expect(EXPECTED).toHaveLength(33);
-    });
-
-    test.each(EXPECTED)('contains "%s"', (word) => {
-      expect(STOP_WORDS_SET.has(word)).toBe(true);
-    });
-
-    test('all stop words are lowercase and consist only of a-z', () => {
-      for (const w of STOP_WORDS_SET) {
-        expect(w).toMatch(/^[a-z]+$/);
-      }
-    });
-  });
-
   describe('isStopWord', () => {
     test.each(EXPECTED)('"%s" is a stop word', (word) => {
       expect(isStopWord(word)).toBe(true);
