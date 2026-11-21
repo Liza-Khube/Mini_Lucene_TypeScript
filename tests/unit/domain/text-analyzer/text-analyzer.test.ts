@@ -15,9 +15,12 @@ describe('Domain TextAnalyzer', () => {
       expect(analyzer.analyze('')).toEqual([]);
     });
 
-    test('spaces only → []', () => {
-      expect(analyzer.analyze('   \n\t  ')).toEqual([]);
-    });
+    test.each([' ', '   ', '\t', '\n', '\r\n', ' \t\n\r ', '   \n\t  '])(
+      'whitespace only %j → []',
+      (input) => {
+        expect(analyzer.analyze(input)).toEqual([]);
+      },
+    );
 
     test('punctuation only → []', () => {
       expect(analyzer.analyze('?!... --- ,,,')).toEqual([]);
@@ -35,6 +38,10 @@ describe('Domain TextAnalyzer', () => {
   describe('case normalization', () => {
     test('lower case is applied to all terms', () => {
       expect(terms(analyzer, 'FOX Brown')).toEqual(['fox', 'brown']);
+    });
+
+    test('mixed case inside a word is lowercased before stemming', () => {
+      expect(terms(analyzer, 'CaMeLcAsE')).toEqual(['camelcas']);
     });
 
     test('stop words are recognized regardless of case', () => {
@@ -56,9 +63,12 @@ describe('Domain TextAnalyzer', () => {
       expect(terms(analyzer, 'the quick brown fox')).toEqual(['quick', 'brown', 'fox']);
     });
 
-    test.each([...STOP_WORDS])('stop word "%s" is dropped', (word) => {
-      expect(analyzer.analyze(word)).toEqual([]);
-    });
+    test.each(['a', 'an', 'and', 'the', 'is', 'of', 'to', 'with', 'not', 'or'])(
+      'stop word "%s" is dropped',
+      (word) => {
+        expect(analyzer.analyze(word)).toEqual([]);
+      },
+    );
 
     test('stop word is dropped before stemming ("this" does not become "thi")', () => {
       expect(analyzer.analyze('this')).toEqual([]);
@@ -85,12 +95,14 @@ describe('Domain TextAnalyzer', () => {
       expect(terms(analyzer, 'Cats running')).toEqual(['cat', 'run']);
     });
 
-    test('result matches stem(tokenize) for non-stop words', () => {
-      const text = 'Searching documents quickly across indexes';
-      const expected = tokenize(text)
-        .filter((t) => !STOP_WORDS.has(t.term))
-        .map((t) => ({ term: stem(t.term), position: t.position }));
-      expect(analyzer.analyze(text)).toEqual(expected);
+    test('analyzes non-stop words with Porter stemming and 1-based positions', () => {
+      expect(analyzer.analyze('Searching documents quickly across indexes')).toEqual([
+        { term: 'search', position: 1 },
+        { term: 'document', position: 2 },
+        { term: 'quickli', position: 3 },
+        { term: 'across', position: 4 },
+        { term: 'index', position: 5 },
+      ]);
     });
 
     test('different word forms yield the same term (plurals, -ing, -s)', () => {
@@ -148,12 +160,11 @@ describe('Domain TextAnalyzer', () => {
       }
     });
 
-    test('positions are consistent with tokenize()', () => {
-      const text = 'The Quick brown fox jumps over the lazy dog';
-      const allowed = new Map(tokenize(text).map((t) => [t.position, t.term]));
-      for (const { position, term } of analyzer.analyze(text)) {
-        expect(stem(allowed.get(position)!)).toBe(term);
-      }
+    test('leading, trailing and multiple spaces do not create empty tokens', () => {
+      expect(analyzer.analyze('   cat    dog   ')).toEqual([
+        { term: 'cat', position: 1 },
+        { term: 'dog', position: 2 },
+      ]);
     });
 
     test('repeated words receive distinct positions', () => {
@@ -211,6 +222,27 @@ describe('Domain TextAnalyzer', () => {
     });
   });
 
+  describe('delimiters', () => {
+    test.each([
+      ['cat,dog', ['cat', 'dog']],
+      ['cat;dog', ['cat', 'dog']],
+      ['cat.dog', ['cat', 'dog']],
+      ['cat!dog?', ['cat', 'dog']],
+      ['cat\tdog', ['cat', 'dog']],
+      ['cat\ndog', ['cat', 'dog']],
+      ['cat\r\ndog', ['cat', 'dog']],
+      ['well-known', ['well', 'known']],
+      ['snake_case', ['snake', 'case']],
+      ["don't", ['don', 't']],
+      ['file.name.txt', ['file', 'name', 'txt']],
+      ['user@example.com', ['user', 'exampl', 'com']],
+      ['"brown pillow"', ['brown', 'pillow']],
+      ['(cat)', ['cat']],
+    ])('%j → %j', (input, expected) => {
+      expect(terms(analyzer, input)).toEqual(expected);
+    });
+  });
+
   describe('numbers and mixed content', () => {
     test('words, numbers, and punctuation', () => {
       expect(analyzer.analyze('Year 2024!')).toEqual([
@@ -219,12 +251,42 @@ describe('Domain TextAnalyzer', () => {
       ]);
     });
 
+    test('letters and digits in one word constitute a single token', () => {
+      expect(terms(analyzer, 'abc123def')).toEqual(['abc123def']);
+    });
+
+    test('word starting with digits', () => {
+      expect(terms(analyzer, '3d 4k')).toEqual(['3d', '4k']);
+    });
+
+    test('number with decimal point is split into two parts', () => {
+      expect(terms(analyzer, '3.14')).toEqual(['3', '14']);
+    });
+
     test('non-Latin words are delimiters and do not produce tokens', () => {
       expect(terms(analyzer, 'привіт world')).toEqual(['world']);
+    });
+
+    test('diacritic letters split the word', () => {
+      expect(terms(analyzer, 'café')).toEqual(['caf']);
+      expect(terms(analyzer, 'naïve')).toEqual(['na', 've']);
+      expect(terms(analyzer, 'résumé')).toEqual(['r', 'sum']);
+    });
+
+    test('hieroglyphs, emojis and non-ASCII digits act as delimiters', () => {
+      expect(terms(analyzer, '猫 cat 犬')).toEqual(['cat']);
+      expect(terms(analyzer, '🐱cat🐶dog🙂')).toEqual(['cat', 'dog']);
+      expect(terms(analyzer, '٣ 3 ３')).toEqual(['3']);
     });
   });
 
   describe('resilience to extreme inputs', () => {
+    test('control, zero-width and unpaired surrogate characters split valid words', () => {
+      expect(terms(analyzer, '\u0000cat\u0007dog\u001F')).toEqual(['cat', 'dog']);
+      expect(terms(analyzer, '\uFEFFcat\u200Bdog')).toEqual(['cat', 'dog']);
+      expect(terms(analyzer, '\uD800cat\uDC00')).toEqual(['cat']);
+    });
+
     test.each([
       ['emoji', '🐱🐶🙂'.repeat(1000)],
       ['hieroglyphs', '猫犬鳥'.repeat(1000)],
@@ -263,7 +325,7 @@ describe('Domain TextAnalyzer', () => {
 
     test('no stop words are included in the result', () => {
       for (const { term } of analyzer.analyze('the cat is in the hat')) {
-        expect(STOP_WORDS.has(term)).toBe(false);
+        expect(isStopWord(term)).toBe(false);
       }
     });
 
@@ -294,6 +356,12 @@ describe('Domain TextAnalyzer', () => {
 
     test('returns a new array on each call', () => {
       expect(analyzer.analyze('cat')).not.toBe(analyzer.analyze('cat'));
+    });
+
+    test('mutation of result does not affect subsequent calls', () => {
+      const result = analyzer.analyze('cat');
+      result.push({ term: 'x', position: 99 });
+      expect(analyzer.analyze('cat')).toEqual([{ term: 'cat', position: 1 }]);
     });
   });
 });
