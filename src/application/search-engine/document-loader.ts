@@ -71,14 +71,7 @@ function formatDocumentSource(
 ): string {
   const separator = rootPath.includes('\\') && !rootPath.includes('/') ? '\\' : '/';
   const base = trimTrailingSeparators(rootPath);
-  if (relativeSegments.length === 0) {
-    return base;
-  }
-
   const relativePath = relativeSegments.join(separator);
-  if (base === '') {
-    return relativePath;
-  }
   if (base.endsWith('/') || base.endsWith('\\')) {
     return `${base}${relativePath}`;
   }
