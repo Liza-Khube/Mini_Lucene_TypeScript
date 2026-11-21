@@ -39,7 +39,7 @@ const EXPECTED = [
 
 describe('Domain TextAnalyzer StopWords', () => {
   describe('isStopWord', () => {
-    test.each(EXPECTED)('"%s" is a stop word', (word) => {
+    test.each(EXPECTED)('should recognize "%s" as a stop word', (word) => {
       expect(isStopWord(word)).toBe(true);
     });
 
@@ -56,11 +56,11 @@ describe('Domain TextAnalyzer StopWords', () => {
       'do',
       'from',
       'which',
-    ])('"%s" is not a stop word', (word) => {
+    ])('should not treat "%s" as a stop word', (word) => {
       expect(isStopWord(word)).toBe(false);
     });
 
-    test('matches whole word only, not prefix or suffix', () => {
+    test('should match whole words only, not prefixes or suffixes', () => {
       expect(isStopWord('theory')).toBe(false);
       expect(isStopWord('ant')).toBe(false);
       expect(isStopWord('island')).toBe(false);

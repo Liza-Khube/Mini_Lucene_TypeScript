@@ -11,44 +11,44 @@ describe('Domain TextAnalyzer', () => {
   });
 
   describe('empty and degenerate inputs', () => {
-    test('empty string → []', () => {
+    test('should return empty array for empty string', () => {
       expect(analyzer.analyze('')).toEqual([]);
     });
 
     test.each([' ', '   ', '\t', '\n', '\r\n', ' \t\n\r ', '   \n\t  '])(
-      'whitespace only %j → []',
+      'should return empty array for whitespace-only input %j',
       (input) => {
         expect(analyzer.analyze(input)).toEqual([]);
       },
     );
 
-    test('punctuation only → []', () => {
+    test('should return empty array for punctuation-only input', () => {
       expect(analyzer.analyze('?!... --- ,,,')).toEqual([]);
     });
 
-    test('stop words only → [] (not an error)', () => {
+    test('should return empty array for stop-words-only input without throwing', () => {
       expect(analyzer.analyze('the and of to be')).toEqual([]);
     });
 
-    test('non-ASCII characters only → []', () => {
+    test('should return empty array for non-ASCII-only input', () => {
       expect(analyzer.analyze('привіт 猫 🐱')).toEqual([]);
     });
   });
 
   describe('case normalization', () => {
-    test('lower case is applied to all terms', () => {
+    test('should convert all terms to lowercase', () => {
       expect(terms(analyzer, 'FOX Brown')).toEqual(['fox', 'brown']);
     });
 
-    test('mixed case inside a word is lowercased before stemming', () => {
+    test('should lowercase mixed case inside a word before stemming', () => {
       expect(terms(analyzer, 'CaMeLcAsE')).toEqual(['camelcas']);
     });
 
-    test('stop words are recognized regardless of case', () => {
+    test('should recognize stop words regardless of case', () => {
       expect(analyzer.analyze('THE The tHe')).toEqual([]);
     });
 
-    test('uppercase AND / OR / NOT in text are treated as normal stop words', () => {
+    test('should treat uppercase AND / OR / NOT in text as normal stop words', () => {
       expect(terms(analyzer, 'cat AND dog OR mouse NOT bird')).toEqual([
         'cat',
         'dog',
@@ -59,23 +59,23 @@ describe('Domain TextAnalyzer', () => {
   });
 
   describe('stop words filtering', () => {
-    test('removes stop words from the middle of a sentence', () => {
+    test('should remove stop words from the middle of a sentence', () => {
       expect(terms(analyzer, 'the quick brown fox')).toEqual(['quick', 'brown', 'fox']);
     });
 
     test.each(['a', 'an', 'and', 'the', 'is', 'of', 'to', 'with', 'not', 'or'])(
-      'stop word "%s" is dropped',
+      'should drop stop word "%s"',
       (word) => {
         expect(analyzer.analyze(word)).toEqual([]);
       },
     );
 
-    test('stop word is dropped before stemming ("this" does not become "thi")', () => {
+    test('should drop stop words before stemming ("this" does not become "thi")', () => {
       expect(analyzer.analyze('this')).toEqual([]);
       expect(analyzer.analyze('was')).toEqual([]);
     });
 
-    test('word that only starts with a stop word is not dropped', () => {
+    test('should not drop a word that only starts with a stop word', () => {
       expect(terms(analyzer, 'theory island ant')).toEqual([
         stem('theory'),
         stem('island'),
@@ -83,7 +83,7 @@ describe('Domain TextAnalyzer', () => {
       ]);
     });
 
-    test('"To be, or not to be: that is the dilemma." → dilemma only', () => {
+    test('should keep only "dilemma" in "To be, or not to be: that is the dilemma."', () => {
       expect(analyzer.analyze('To be, or not to be: that is the dilemma.')).toEqual([
         { term: 'dilemma', position: 10 },
       ]);
@@ -91,11 +91,11 @@ describe('Domain TextAnalyzer', () => {
   });
 
   describe('stemming', () => {
-    test('applies Porter stemming to each term', () => {
+    test('should apply Porter stemming to each term', () => {
       expect(terms(analyzer, 'Cats running')).toEqual(['cat', 'run']);
     });
 
-    test('analyzes non-stop words with Porter stemming and 1-based positions', () => {
+    test('should analyze non-stop words with Porter stemming and 1-based positions', () => {
       expect(analyzer.analyze('Searching documents quickly across indexes')).toEqual([
         { term: 'search', position: 1 },
         { term: 'document', position: 2 },
@@ -105,23 +105,23 @@ describe('Domain TextAnalyzer', () => {
       ]);
     });
 
-    test('different word forms yield the same term (plurals, -ing, -s)', () => {
+    test('should reduce different word forms (plurals, -ing, -s) to the same term', () => {
       const forms = ['run', 'runs', 'running', 'RUNNING'];
       const roots = new Set(forms.map((f) => terms(analyzer, f)[0]));
       expect(roots.size).toBe(1);
     });
 
-    test('numbers remain unchanged', () => {
+    test('should leave numbers unchanged', () => {
       expect(terms(analyzer, '2024 42')).toEqual(['2024', '42']);
     });
   });
 
   describe('positions', () => {
-    test('positions start at 1', () => {
+    test('should start positions at 1', () => {
       expect(analyzer.analyze('cat')).toEqual([{ term: 'cat', position: 1 }]);
     });
 
-    test('stop words are not indexed but occupy a position', () => {
+    test('should omit stop words while advancing token positions', () => {
       expect(analyzer.analyze('The cat sat on the mat')).toEqual([
         { term: 'cat', position: 2 },
         { term: 'sat', position: 3 },
@@ -129,21 +129,21 @@ describe('Domain TextAnalyzer', () => {
       ]);
     });
 
-    test('phrase with stop word inside leaves gap in positions', () => {
+    test('should leave a position gap when a phrase contains a stop word', () => {
       expect(analyzer.analyze('brown the pillow')).toEqual([
         { term: 'brown', position: 1 },
         { term: 'pillow', position: 3 },
       ]);
     });
 
-    test('multiple consecutive stop words increase position gap', () => {
+    test('should increase position gap for multiple consecutive stop words', () => {
       expect(analyzer.analyze('cat is in the box')).toEqual([
         { term: 'cat', position: 1 },
         { term: 'box', position: 5 },
       ]);
     });
 
-    test('position matches the word index in original text', () => {
+    test('should match the word index in the original text', () => {
       const text = 'People in the room were talking about soup';
       const result = analyzer.analyze(text);
       const words = text.toLowerCase().split(/\s+/);
@@ -152,7 +152,7 @@ describe('Domain TextAnalyzer', () => {
       }
     });
 
-    test('positions strictly increase', () => {
+    test('should assign strictly increasing positions', () => {
       const result = analyzer.analyze('a cat and a dog and a bird with a fish');
       const pos = result.map((t) => t.position);
       for (let i = 1; i < pos.length; i++) {
@@ -160,14 +160,14 @@ describe('Domain TextAnalyzer', () => {
       }
     });
 
-    test('leading, trailing and multiple spaces do not create empty tokens', () => {
+    test('should not create empty tokens from leading, trailing or multiple spaces', () => {
       expect(analyzer.analyze('   cat    dog   ')).toEqual([
         { term: 'cat', position: 1 },
         { term: 'dog', position: 2 },
       ]);
     });
 
-    test('repeated words receive distinct positions', () => {
+    test('should assign distinct positions to repeated words', () => {
       expect(analyzer.analyze('Cats, CATS and cat')).toEqual([
         { term: 'cat', position: 1 },
         { term: 'cat', position: 2 },
@@ -175,7 +175,7 @@ describe('Domain TextAnalyzer', () => {
       ]);
     });
 
-    test('punctuation and line breaks do not affect positions', () => {
+    test('should ignore punctuation and line breaks when assigning positions', () => {
       expect(analyzer.analyze('cat,\n\n dog;   bird!')).toEqual([
         { term: 'cat', position: 1 },
         { term: 'dog', position: 2 },
@@ -185,39 +185,39 @@ describe('Domain TextAnalyzer', () => {
   });
 
   describe('document length (for BM25)', () => {
-    test('empty document → 0', () => {
+    test('should return length 0 for empty document', () => {
       expect(analyzer.analyze('').length).toBe(0);
     });
 
-    test('document with single word → 1', () => {
+    test('should return length 1 for document with single word', () => {
       expect(analyzer.analyze('hello').length).toBe(1);
     });
 
-    test('document with single stop word → 0', () => {
+    test('should return length 0 for document with single stop word', () => {
       expect(analyzer.analyze('the').length).toBe(0);
     });
 
-    test('length = count of non-stop-word tokens', () => {
+    test('should return length equal to count of non-stop-word tokens', () => {
       expect(analyzer.analyze('the quick brown fox').length).toBe(3);
     });
 
-    test('repeated words are counted separately', () => {
+    test('should count repeated words separately', () => {
       expect(analyzer.analyze('cat cat cat').length).toBe(3);
     });
   });
 
   describe('symmetry between documents and queries', () => {
-    test('different word forms and cases in query match document', () => {
+    test('should match different word forms and cases between query and document', () => {
       const doc = terms(analyzer, 'many people');
       const query = terms(analyzer, 'PEOPLE!');
       expect(doc).toContain(query[0]);
     });
 
-    test('query term in plural matches singular in document', () => {
+    test('should match plural query term to singular document term', () => {
       expect(terms(analyzer, 'cats')).toEqual(terms(analyzer, 'cat'));
     });
 
-    test('query term that is a stop word yields empty result', () => {
+    test('should return empty result when query term is a stop word', () => {
       expect(analyzer.analyze('the')).toEqual([]);
     });
   });
@@ -238,42 +238,42 @@ describe('Domain TextAnalyzer', () => {
       ['user@example.com', ['user', 'exampl', 'com']],
       ['"brown pillow"', ['brown', 'pillow']],
       ['(cat)', ['cat']],
-    ])('%j → %j', (input, expected) => {
+    ])('should split %j into %j', (input, expected) => {
       expect(terms(analyzer, input)).toEqual(expected);
     });
   });
 
   describe('numbers and mixed content', () => {
-    test('words, numbers, and punctuation', () => {
+    test('should tokenize words and numbers while ignoring punctuation', () => {
       expect(analyzer.analyze('Year 2024!')).toEqual([
         { term: 'year', position: 1 },
         { term: '2024', position: 2 },
       ]);
     });
 
-    test('letters and digits in one word constitute a single token', () => {
+    test('should keep letters and digits in one word as a single token', () => {
       expect(terms(analyzer, 'abc123def')).toEqual(['abc123def']);
     });
 
-    test('word starting with digits', () => {
+    test('should preserve words starting with digits', () => {
       expect(terms(analyzer, '3d 4k')).toEqual(['3d', '4k']);
     });
 
-    test('number with decimal point is split into two parts', () => {
+    test('should split number with decimal point into two parts', () => {
       expect(terms(analyzer, '3.14')).toEqual(['3', '14']);
     });
 
-    test('non-Latin words are delimiters and do not produce tokens', () => {
+    test('should treat non-Latin words as delimiters without producing tokens', () => {
       expect(terms(analyzer, 'привіт world')).toEqual(['world']);
     });
 
-    test('diacritic letters split the word', () => {
+    test('should treat diacritic letters as delimiters that split words', () => {
       expect(terms(analyzer, 'café')).toEqual(['caf']);
       expect(terms(analyzer, 'naïve')).toEqual(['na', 've']);
       expect(terms(analyzer, 'résumé')).toEqual(['r', 'sum']);
     });
 
-    test('hieroglyphs, emojis and non-ASCII digits act as delimiters', () => {
+    test('should treat hieroglyphs, emojis and non-ASCII digits as delimiters', () => {
       expect(terms(analyzer, '猫 cat 犬')).toEqual(['cat']);
       expect(terms(analyzer, '🐱cat🐶dog🙂')).toEqual(['cat', 'dog']);
       expect(terms(analyzer, '٣ 3 ３')).toEqual(['3']);
@@ -281,7 +281,7 @@ describe('Domain TextAnalyzer', () => {
   });
 
   describe('resilience to extreme inputs', () => {
-    test('control, zero-width and unpaired surrogate characters split valid words', () => {
+    test('should split valid words on control, zero-width and unpaired surrogate characters', () => {
       expect(terms(analyzer, '\u0000cat\u0007dog\u001F')).toEqual(['cat', 'dog']);
       expect(terms(analyzer, '\uFEFFcat\u200Bdog')).toEqual(['cat', 'dog']);
       expect(terms(analyzer, '\uD800cat\uDC00')).toEqual(['cat']);
@@ -294,7 +294,7 @@ describe('Domain TextAnalyzer', () => {
       ['long spaces', ' '.repeat(100_000)],
       ['zero width', '\u200B\uFEFF\u2060'.repeat(100)],
       ['unpaired surrogates', '\uD800\uDC00\uD800'],
-    ])('%s → does not throw and returns an array', (_name, input) => {
+    ])('should not throw and return an array for %s input', (_name, input) => {
       let result: unknown;
       expect(() => {
         result = analyzer.analyze(input);
@@ -302,13 +302,13 @@ describe('Domain TextAnalyzer', () => {
       expect(Array.isArray(result)).toBe(true);
     });
 
-    test('very long text is processed without exceptions', () => {
+    test('should process very long text without exceptions', () => {
       const text = 'the quick brown fox '.repeat(50_000);
       const result = analyzer.analyze(text);
       expect(result.length).toBe(150_000);
     });
 
-    test('very long single word', () => {
+    test('should process very long single word without throwing', () => {
       const result = analyzer.analyze('a'.repeat(50_000));
       expect(result).toHaveLength(1);
     });
@@ -317,19 +317,19 @@ describe('Domain TextAnalyzer', () => {
   describe('result invariants', () => {
     const TEXT = 'The Quick, brown fox (2024) jumps over the lazy dogs! Running... 42 times.';
 
-    test('each term is non-empty and contains only [a-z0-9]', () => {
+    test('should produce non-empty terms containing only [a-z0-9]', () => {
       for (const { term } of analyzer.analyze(TEXT)) {
         expect(term).toMatch(/^[a-z0-9]+$/);
       }
     });
 
-    test('no stop words are included in the result', () => {
+    test('should exclude all stop words from the result', () => {
       for (const { term } of analyzer.analyze('the cat is in the hat')) {
         expect(isStopWord(term)).toBe(false);
       }
     });
 
-    test('positions are integers ≥ 1', () => {
+    test('should produce integer positions ≥ 1', () => {
       for (const { position } of analyzer.analyze(TEXT)) {
         expect(Number.isInteger(position)).toBe(true);
         expect(position).toBeGreaterThanOrEqual(1);
@@ -338,27 +338,27 @@ describe('Domain TextAnalyzer', () => {
   });
 
   describe('purity and instance independence', () => {
-    test('deterministic', () => {
+    test('should be deterministic across repeated calls', () => {
       expect(analyzer.analyze('Searching the index')).toEqual(
         analyzer.analyze('Searching the index'),
       );
     });
 
-    test('does not retain state between calls (positions do not leak)', () => {
+    test('should not retain state between calls (positions do not leak)', () => {
       analyzer.analyze('one two three four');
       expect(analyzer.analyze('cat')).toEqual([{ term: 'cat', position: 1 }]);
     });
 
-    test('different instances produce identical results', () => {
+    test('should produce identical results across different instances', () => {
       const other = new TextAnalyzer();
       expect(other.analyze('Cats running')).toEqual(analyzer.analyze('Cats running'));
     });
 
-    test('returns a new array on each call', () => {
+    test('should return a new array on each call', () => {
       expect(analyzer.analyze('cat')).not.toBe(analyzer.analyze('cat'));
     });
 
-    test('mutation of result does not affect subsequent calls', () => {
+    test('should not be affected by mutating a previously returned result array', () => {
       const result = analyzer.analyze('cat');
       result.push({ term: 'x', position: 99 });
       expect(analyzer.analyze('cat')).toEqual([{ term: 'cat', position: 1 }]);

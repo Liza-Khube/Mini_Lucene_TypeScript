@@ -11,7 +11,7 @@ describe('Domain TextAnalyzer PorterStemmer', () => {
       ['ties', 'ti'],
       ['caress', 'caress'],
       ['cats', 'cat'],
-    ])('%s → %s', (input, expected) => {
+    ])('should stem %s to %s', (input, expected) => {
       expect(stem(input)).toBe(expected);
     });
   });
@@ -24,7 +24,7 @@ describe('Domain TextAnalyzer PorterStemmer', () => {
       ['bled', 'bled'],
       ['motoring', 'motor'],
       ['sing', 'sing'],
-    ])('suffix removal: %s → %s', (input, expected) => {
+    ])('should remove suffix: %s → %s', (input, expected) => {
       expect(stem(input)).toBe(expected);
     });
 
@@ -33,7 +33,7 @@ describe('Domain TextAnalyzer PorterStemmer', () => {
       ['troubled', 'troubl'],
       ['sized', 'size'],
       ['filing', 'file'],
-    ])('restoring terminal e: %s → %s', (input, expected) => {
+    ])('should restore terminal e: %s → %s', (input, expected) => {
       expect(stem(input)).toBe(expected);
     });
 
@@ -45,7 +45,7 @@ describe('Domain TextAnalyzer PorterStemmer', () => {
       ['hissing', 'hiss'],
       ['fizzed', 'fizz'],
       ['failing', 'fail'],
-    ])('double consonant: %s → %s', (input, expected) => {
+    ])('should handle double consonant: %s → %s', (input, expected) => {
       expect(stem(input)).toBe(expected);
     });
   });
@@ -54,7 +54,7 @@ describe('Domain TextAnalyzer PorterStemmer', () => {
     test.each<Case>([
       ['happy', 'happi'],
       ['sky', 'sky'],
-    ])('%s → %s', (input, expected) => {
+    ])('should stem %s to %s', (input, expected) => {
       expect(stem(input)).toBe(expected);
     });
   });
@@ -82,7 +82,7 @@ describe('Domain TextAnalyzer PorterStemmer', () => {
       ['formaliti', 'formal'],
       ['sensitiviti', 'sensit'],
       ['sensibiliti', 'sensibl'],
-    ])('%s → %s', (input, expected) => {
+    ])('should stem %s to %s', (input, expected) => {
       expect(stem(input)).toBe(expected);
     });
   });
@@ -96,7 +96,7 @@ describe('Domain TextAnalyzer PorterStemmer', () => {
       ['electrical', 'electr'],
       ['hopeful', 'hope'],
       ['goodness', 'good'],
-    ])('%s → %s', (input, expected) => {
+    ])('should stem %s to %s', (input, expected) => {
       expect(stem(input)).toBe(expected);
     });
   });
@@ -120,11 +120,11 @@ describe('Domain TextAnalyzer PorterStemmer', () => {
       ['activate', 'activ'],
       ['effective', 'effect'],
       ['bowdlerize', 'bowdler'],
-    ])('%s → %s', (input, expected) => {
+    ])('should stem %s to %s', (input, expected) => {
       expect(stem(input)).toBe(expected);
     });
 
-    test('suffix is not removed if stem m ≤ 1', () => {
+    test('should not remove suffix if stem m ≤ 1', () => {
       expect(stem('feudalism')).toBe('feudal');
       expect(stem('callousness')).toBe('callous');
     });
@@ -137,14 +137,14 @@ describe('Domain TextAnalyzer PorterStemmer', () => {
       ['cease', 'ceas'],
       ['controll', 'control'],
       ['roll', 'roll'],
-    ])('%s → %s', (input, expected) => {
+    ])('should stem %s to %s', (input, expected) => {
       expect(stem(input)).toBe(expected);
     });
   });
 
   describe('words that do not change', () => {
     test.each(['cat', 'fox', 'brown', 'pillow', 'soup', 'year', 'dilemma', 'caress'])(
-      '"%s" unchanged',
+      'should leave "%s" unchanged',
       (word) => {
         expect(stem(word)).toBe(word);
       },
@@ -152,32 +152,35 @@ describe('Domain TextAnalyzer PorterStemmer', () => {
   });
 
   describe('short words and edge cases', () => {
-    test('empty string → empty string', () => {
+    test('should keep empty string unchanged', () => {
       expect(stem('')).toBe('');
     });
 
     test.each(['a', 'i', 'is', 'be', 'at', 'to', 'by'])(
-      'word with length ≤ 2 ("%s") remains unchanged',
+      'should leave word with length ≤ 2 ("%s") unchanged',
       (word) => {
         expect(stem(word)).toBe(word);
       },
     );
 
-    test.each(['2024', '42', '007', '1'])('purely numeric token "%s" remains unchanged', (word) => {
-      expect(stem(word)).toBe(word);
-    });
+    test.each(['2024', '42', '007', '1'])(
+      'should leave purely numeric token "%s" unchanged',
+      (word) => {
+        expect(stem(word)).toBe(word);
+      },
+    );
 
-    test('token with digits does not throw', () => {
+    test('should not throw for token with digits', () => {
       expect(() => stem('abc123')).not.toThrow();
       expect(() => stem('3d')).not.toThrow();
     });
 
-    test('very long word does not throw and does not lengthen', () => {
+    test('should not throw or lengthen very long word', () => {
       const word = 'a'.repeat(10_000);
       expect(stem(word).length).toBeLessThanOrEqual(word.length);
     });
 
-    test('word consisting only of vowels / consonants', () => {
+    test('should handle words consisting only of vowels or consonants', () => {
       expect(() => stem('aeiou')).not.toThrow();
       expect(() => stem('bcdfg')).not.toThrow();
       expect(stem('aeiou').length).toBeLessThanOrEqual(5);
@@ -208,19 +211,19 @@ describe('Domain TextAnalyzer PorterStemmer', () => {
       '2024',
     ];
 
-    test('deterministic: same input → same output', () => {
+    test('should be deterministic for the same input', () => {
       for (const w of SAMPLE) {
         expect(stem(w)).toBe(stem(w));
       }
     });
 
-    test('never lengthens the word', () => {
+    test('should never lengthen the word', () => {
       for (const w of SAMPLE) {
         expect(stem(w).length).toBeLessThanOrEqual(w.length);
       }
     });
 
-    test('result is non-empty for non-empty input', () => {
+    test('should return non-empty result for non-empty input', () => {
       for (const w of SAMPLE) {
         expect(stem(w).length).toBeGreaterThan(0);
       }
@@ -233,7 +236,7 @@ describe('Domain TextAnalyzer PorterStemmer', () => {
       [['cat', 'cats']],
       [['connect', 'connected', 'connecting', 'connection', 'connections']],
       [['generalize', 'generalization', 'generalizations']],
-    ])('%j reduce to the same stem', (forms) => {
+    ])('should reduce %j to the same stem', (forms) => {
       const roots = new Set(forms.map(stem));
       expect(roots.size).toBe(1);
     });
