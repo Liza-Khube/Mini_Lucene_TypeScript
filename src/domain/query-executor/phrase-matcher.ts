@@ -8,7 +8,7 @@ interface IPhraseClause {
   readonly postings: readonly IPosting[];
 }
 
-export function intersectPositions(
+function intersectPositions(
   basePositions: readonly number[],
   targetPositions: readonly number[],
   offset: number,
