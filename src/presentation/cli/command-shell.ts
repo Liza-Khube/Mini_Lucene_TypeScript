@@ -7,7 +7,7 @@ import type {
   IIndexStats,
   ISearchEngine,
   SearchResult,
-} from '../application/search-engine/public-api.js';
+} from '../../application/search-engine/public-api.js';
 import { isCommandTakeArgs, formatHelpOutput, getCommandUsage } from './commands.js';
 import { parseCommandInput, type ParsedCommandInput } from './command-input-parser.js';
 
@@ -16,11 +16,7 @@ export class CommandShell {
   private readonly readline;
   private readonly output: Writable;
 
-  constructor(
-    engine: ISearchEngine,
-    output: Writable = stdout,
-    input: Readable = stdin,
-  ) {
+  constructor(engine: ISearchEngine, output: Writable = stdout, input: Readable = stdin) {
     this.engine = engine;
     this.output = output;
     this.readline = createInterface({ input, output });
@@ -52,7 +48,7 @@ export class CommandShell {
     this.print('\nExiting...');
   }
 
-  async execute(parsedInput: ParsedCommandInput): Promise<boolean> {
+  private async execute(parsedInput: ParsedCommandInput): Promise<boolean> {
     if (parsedInput.type === 'empty') return true;
 
     if (parsedInput.type === 'unknown') {
