@@ -6,12 +6,12 @@ import {
   type IScoringIndex,
 } from '../../../../src/domain/ranking/public-api.js';
 
-export interface InvalidBm25OptionsCase {
+interface InvalidBm25OptionsCase {
   readonly name: string;
   readonly options: IBm25Options;
 }
 
-export interface InvalidTopKCase {
+interface InvalidTopKCase {
   readonly name: string;
   readonly topK: number;
 }
@@ -65,7 +65,7 @@ export const TOP_K_DOCS: readonly string[] = [
 
 export const TIED_DOCS: readonly string[] = ['cat pad', 'cat pad', 'cat pad', 'cat pad'];
 
-export const words = (text: string): string[] => {
+const words = (text: string): string[] => {
   const trimmed = text.trim();
   return trimmed === '' ? [] : trimmed.split(/\s+/);
 };
