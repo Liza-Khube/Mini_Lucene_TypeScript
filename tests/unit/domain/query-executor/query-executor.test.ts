@@ -284,8 +284,49 @@ describe('Domain QueryExecutor', () => {
         { query: '"cat cat"', ast: phrase('cat', 'cat'), expected: [8] },
         { query: '"brown ghost"', ast: phrase('brown', 'ghost'), expected: [] },
         { query: '"ghost pillow"', ast: phrase('ghost', 'pillow'), expected: [] },
+        { query: '"cat pillow"', ast: phrase('cat', 'pillow'), expected: [] },
       ])('should return the documents $expected for $query', ({ ast, expected }) => {
         expect(run(ast, phraseIndex)).toStrictEqual(expected);
+      });
+
+      test('should return an empty result for an empty phrase', () => {
+        expect(run(phrase(), phraseIndex)).toStrictEqual([]);
+      });
+
+      test('should match a single-term phrase even with a non-zero leading offset', () => {
+        expect(run(phrase(null, null, 'fox'), phraseIndex)).toStrictEqual([3, 11]);
+      });
+
+      test('should stop querying later phrase terms as soon as an earlier term is absent from the index', () => {
+        const spied = buildIndex(['brown pillow', 'quick fox']);
+        const getPostings = vi.spyOn(spied, 'getPostings');
+
+        expect(run(phrase('ghost', 'brown', 'pillow'), spied)).toStrictEqual([]);
+        expect(getPostings).toHaveBeenCalledTimes(1);
+        expect(getPostings).toHaveBeenCalledWith('ghost');
+        expect(getPostings).not.toHaveBeenCalledWith('brown');
+      });
+
+      test('should query the index only once for a repeated term inside a phrase', () => {
+        const spied = buildIndex(['cat cat', 'cat dog cat']);
+        const getPostings = vi.spyOn(spied, 'getPostings');
+
+        expect(run(phrase('cat', 'cat'), spied)).toStrictEqual([0]);
+        expect(getPostings).toHaveBeenCalledTimes(1);
+        expect(getPostings).toHaveBeenCalledWith('cat');
+      });
+
+      test('should match accurately when the rarest term is in the middle of the phrase', () => {
+        const rarestMidIndex = buildIndex([
+          'alpha beta gamma',
+          'alpha rare gamma',
+          'alpha beta',
+          'alpha beta rare',
+          'alpha beta gamma rare',
+          'other alpha rare gamma',
+        ]);
+
+        expect(run(phrase('alpha', 'rare', 'gamma'), rarestMidIndex)).toStrictEqual([1, 5]);
       });
 
       describe('with stop-words inside the phrase', () => {
@@ -297,6 +338,11 @@ describe('Domain QueryExecutor', () => {
           },
           { query: '"cat <stop> cat"', ast: phrase('cat', null, 'cat'), expected: [9] },
           { query: '"quick <stop> fox"', ast: phrase('quick', null, 'fox'), expected: [11] },
+          {
+            query: '"<stop> quick brown fox"',
+            ast: phrase(null, 'quick', 'brown', 'fox'),
+            expected: [11],
+          },
           {
             query: '"brown <stop> <stop> pillow"',
             ast: phrase('brown', null, null, 'pillow'),
