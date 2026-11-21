@@ -1,7 +1,5 @@
 import type { IToken } from '../../data/inverted-index/public-api.js';
 
-export type { IToken };
-
 const TOKEN_PATTERN = /[a-z0-9]+/g;
 
 export function tokenize(text: string): IToken[] {
