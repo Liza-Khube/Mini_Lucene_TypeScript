@@ -1,4 +1,5 @@
-import { relative } from 'node:path';
+import { mkdir, rm, symlink } from 'node:fs/promises';
+import { join, relative, sep } from 'node:path';
 import { describe, expect, test } from 'vitest';
 import {
   DEFAULT_TOP_K,
@@ -120,7 +121,7 @@ describe('Application SearchEngine', () => {
         expect(result.durationMs).toBeGreaterThanOrEqual(0);
 
         const searchResult = engine.search('people AND NOT soup');
-        assertExecutedResult(searchResult);
+        expect(searchResult.status).toBe('ok');
         expect(searchResult.totalHits).toBe(2);
         expect(searchResult.hits.map((hit) => hit.rank)).toStrictEqual([1, 2]);
         expect(searchResult.hits[0]!.matches).toStrictEqual([
@@ -169,6 +170,100 @@ describe('Application SearchEngine', () => {
         await corpus.cleanup();
       }
     });
+
+    test('should filter .txt extension case-insensitively and skip edge-case non-.txt filenames', async () => {
+      const corpus = await createTempCorpus({
+        'Report.Txt': 'valid report content',
+        'archive.tar.txt': 'valid archive content',
+        'doc.txt.bak': 'backup should be skipped',
+        README: 'readme should be skipped',
+        '.txt': 'dotfile should be skipped',
+      });
+
+      try {
+        const engine = new SearchEngine();
+        const result = await engine.index(corpus.dirPath);
+
+        expect(result.documentCount).toBe(2);
+        expect(engine.search('valid').hits.map((hit) => hit.source).sort()).toStrictEqual(
+          [join(corpus.dirPath, 'Report.Txt'), join(corpus.dirPath, 'archive.tar.txt')].sort(),
+        );
+        expect(result.skippedFiles).toStrictEqual([
+          {
+            path: join(corpus.dirPath, '.txt'),
+            reason: 'Unsupported file format (only .txt files are supported)',
+          },
+          {
+            path: join(corpus.dirPath, 'README'),
+            reason: 'Unsupported file format (only .txt files are supported)',
+          },
+          {
+            path: join(corpus.dirPath, 'doc.txt.bak'),
+            reason: 'Unsupported file format (only .txt files are supported)',
+          },
+        ]);
+      } finally {
+        await corpus.cleanup();
+      }
+    });
+
+    test('should normalize trailing path separators when formatting indexed document sources', async () => {
+      const corpus = await createTempCorpus({
+        'sub/a.txt': 'alpha',
+      });
+
+      try {
+        const engine = new SearchEngine();
+
+        await engine.index(`${corpus.dirPath}${sep}${sep}`);
+        expect(engine.search('alpha').hits.map((hit) => hit.source)).toStrictEqual([
+          join(corpus.dirPath, 'sub', 'a.txt'),
+        ]);
+
+        const slashRoot = corpus.dirPath.replaceAll('\\', '/');
+        await engine.index(`${slashRoot}///`);
+        expect(engine.search('alpha').hits.map((hit) => hit.source)).toStrictEqual([
+          `${slashRoot}/sub/a.txt`,
+        ]);
+      } finally {
+        await corpus.cleanup();
+      }
+    });
+
+    test('should follow directory symlinks, break cycles, and skip broken symlinks', async () => {
+      const corpus = await createTempCorpus({
+        'root.txt': 'signal root',
+        'sub/nested.txt': 'signal nested',
+      });
+      const external = await createTempCorpus({
+        'linked.txt': 'signal external',
+      });
+
+      try {
+        await symlink(external.dirPath, join(corpus.dirPath, 'linked-dir'), 'junction');
+        await symlink(corpus.dirPath, join(corpus.dirPath, 'sub', 'loop'), 'junction');
+
+        const doomedDir = join(corpus.dirPath, 'doomed');
+        await mkdir(doomedDir);
+        const brokenLinkPath = join(corpus.dirPath, 'broken-link');
+        await symlink(doomedDir, brokenLinkPath, 'junction');
+        await rm(doomedDir, { recursive: true, force: true });
+
+        const engine = new SearchEngine();
+        const result = await engine.index(corpus.dirPath);
+
+        expect(result.documentCount).toBe(3);
+        expect(engine.search('external').hits.map((hit) => hit.source)).toStrictEqual([
+          join(corpus.dirPath, 'linked-dir', 'linked.txt'),
+        ]);
+        expect(result.skippedFiles).toStrictEqual([
+          { path: brokenLinkPath, reason: 'Broken symbolic link' },
+        ]);
+      } finally {
+        await corpus.cleanup();
+        await external.cleanup();
+      }
+    });
   });
 
   describe('search behavior', () => {
@@ -177,7 +272,7 @@ describe('Application SearchEngine', () => {
       engine.indexDocuments(README_CORPUS);
 
       const result = engine.search('people AND NOT soup');
-      assertExecutedResult(result);
+      expect(result.status).toBe('ok');
 
       expect(result.query).toBe('people AND NOT soup');
       expect(result.totalHits).toBe(2);
@@ -207,7 +302,7 @@ describe('Application SearchEngine', () => {
       ]);
 
       const result = engine.search('"brown pillows"');
-      assertExecutedResult(result);
+      expect(result.status).toBe('ok');
       expect(result.hits.map((h) => h.source)).toStrictEqual(['match.txt']);
       expect(result.hits[0]!.matches).toStrictEqual([
         { term: 'brown', indexedTerm: 'brown', positions: [2] },
@@ -330,12 +425,43 @@ describe('Application SearchEngine', () => {
       }
     });
 
+    test('should ignore stop words mixed with positive terms and skip negated phrases in matches', () => {
+      const readmeEngine = new SearchEngine();
+      readmeEngine.indexDocuments(README_CORPUS);
+
+      const mixedStopResult = readmeEngine.search('the AND people');
+      expect(mixedStopResult.status).toBe('ok');
+      expect(mixedStopResult.totalHits).toBe(3);
+      expect(mixedStopResult.hits[0]!.matches).toStrictEqual([
+        { term: 'people', indexedTerm: 'peopl', positions: [2, 5, 8] },
+      ]);
+
+      const negatedPhraseResult = readmeEngine.search('people AND NOT "warm soup"');
+      expect(negatedPhraseResult.status).toBe('ok');
+      expect(negatedPhraseResult.hits.map((h) => h.source)).toStrictEqual([
+        './docs/doc003.txt',
+        './docs/doc004.txt',
+      ]);
+      expect(negatedPhraseResult.hits[0]!.matches).toStrictEqual([
+        { term: 'people', indexedTerm: 'peopl', positions: [2, 5, 8] },
+      ]);
+
+      const phraseEngine = new SearchEngine();
+      phraseEngine.indexDocuments([{ source: 'match.txt', rawText: 'a brown pillow' }]);
+      const stopPhraseResult = phraseEngine.search('"a brown pillow"');
+      expect(stopPhraseResult.status).toBe('ok');
+      expect(stopPhraseResult.hits[0]!.matches).toStrictEqual([
+        { term: 'brown', indexedTerm: 'brown', positions: [2] },
+        { term: 'pillow', indexedTerm: 'pillow', positions: [3] },
+      ]);
+    });
+
     test('should return empty hits for missing terms without throwing', () => {
       const engine = new SearchEngine();
       engine.indexDocuments(README_CORPUS);
 
       const result = engine.search('nonexistentterm');
-      assertExecutedResult(result);
+      expect(result.status).toBe('ok');
       expect(result.totalHits).toBe(0);
       expect(result.hits).toStrictEqual([]);
     });
