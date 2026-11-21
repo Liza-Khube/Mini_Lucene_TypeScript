@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { stem } from '../../../../src/domain/text-analyzer/porter-stemmer.js';
+import { stem } from '../../../../src/domain/text-analyzer/public-api.js';
 
 type Case = [input: string, expected: string];
 
