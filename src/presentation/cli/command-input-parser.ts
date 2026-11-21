@@ -1,9 +1,9 @@
 import { isCommandName, type CommandName } from './commands.js';
 
 export type ParsedCommandInput =
-  | { type: 'command'; name: CommandName; args: string }
-  | { type: 'unknown'; name: string }
-  | { type: 'empty' };
+  | { readonly type: 'command'; readonly name: CommandName; readonly args: string }
+  | { readonly type: 'unknown'; readonly name: string }
+  | { readonly type: 'empty' };
 
 export function parseCommandInput(userInput: string): ParsedCommandInput {
   const input: string = userInput.trim();
