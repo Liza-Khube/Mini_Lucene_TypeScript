@@ -21,8 +21,6 @@ export interface IIndexResult extends IIndexStats {
   readonly skippedFiles: readonly ISkippedFile[];
 }
 
-export type SearchStatus = 'ok' | 'empty-query' | 'stop-words-only';
-
 export interface ITermMatch {
   readonly term: string;
   readonly indexedTerm: string;
@@ -37,23 +35,15 @@ export interface ISearchHit {
   readonly matches: readonly ITermMatch[];
 }
 
-interface ISearchResultBase {
+export type SearchResult = {
   readonly query: string;
   readonly totalHits: number;
   readonly hits: readonly ISearchHit[];
   readonly durationMs: number;
-}
-
-export interface IExecutedSearchResult extends ISearchResultBase {
-  readonly status: 'ok';
-}
-
-export interface IEmptySearchResult extends ISearchResultBase {
-  readonly status: 'empty-query' | 'stop-words-only';
-  readonly message: string;
-}
-
-export type SearchResult = IExecutedSearchResult | IEmptySearchResult;
+} & (
+  | { readonly status: 'ok' }
+  | { readonly status: 'empty-query' | 'stop-words-only'; readonly message: string }
+);
 
 export interface ISearchOptions {
   readonly topK?: number;

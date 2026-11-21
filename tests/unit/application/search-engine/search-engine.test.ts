@@ -4,8 +4,6 @@ import {
   DEFAULT_TOP_K,
   SearchEngine,
   type IDocumentInput,
-  type IExecutedSearchResult,
-  type ISearchEngine,
 } from '../../../../src/application/search-engine/public-api.js';
 import { RANKING_CORPUS, README_CORPUS, createTempCorpus } from './fixtures.js';
 
