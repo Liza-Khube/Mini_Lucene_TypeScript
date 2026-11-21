@@ -1,9 +1,7 @@
-import {
-  ReadonlyArrayCursor,
-  createEmptyCursor,
-  type DocId,
-  type ICursor,
-  type IPosting,
+import type {
+  DocId,
+  ICursor,
+  IPosting,
 } from '../../../../src/data/inverted-index/public-api.js';
 import type { ExecutableQueryNode } from '../../../../src/domain/query-analyzer/public-api.js';
 import {
