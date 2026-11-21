@@ -7,12 +7,6 @@ import {
 } from '../../../../src/application/search-engine/public-api.js';
 import { RANKING_CORPUS, README_CORPUS, createTempCorpus } from './fixtures.js';
 
-function assertExecutedResult(
-  result: ReturnType<ISearchEngine['search']>,
-): asserts result is IExecutedSearchResult {
-  expect(result.status).toBe('ok');
-}
-
 describe('Application SearchEngine', () => {
   describe('defaults and constructor options', () => {
     test('should set DEFAULT_TOP_K to 10', () => {
