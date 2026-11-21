@@ -6,7 +6,7 @@ export function validateTopK(topK: number): void {
   }
 }
 
-export function compareScoredDocuments(a: IScoredDocument, b: IScoredDocument): number {
+function compareScoredDocuments(a: IScoredDocument, b: IScoredDocument): number {
   if (a.score !== b.score) {
     return b.score - a.score;
   }
